@@ -3,8 +3,7 @@
 Native **Qt6 / C++20** port of the WebSocket amplifier-bridge. 
 
 The wire format (WebSocket JSON field names, serial command frames) is kept
-**byte-identical** to the original, so the existing ESP8266 device and any
-copies of the old HTML client keep working unchanged.
+**byte-identical** original, so any ESP configured device can connect to the webserver.
 
 ## Two binaries, one codebase
 
