@@ -63,6 +63,34 @@ Closing the console window stops the daemon.
   VCP driver from [ftdichip.com](https://ftdichip.com/drivers/vcp-drivers/).
 * Saved settings live at `%APPDATA%\spe-remote\config.json`.
 
+## Adding a password (optional)
+
+If you'll be reaching the daemon from another machine on the network,
+turn on HTTP Basic auth. From `cmd` or PowerShell in the unzipped
+folder:
+
+```powershell
+spe-remoted.exe --hash-password "your-password-here"
+# pbkdf2-sha256$120000$Tk5Db21wVmQ...$qZ4AZP...
+```
+
+Open `%APPDATA%\spe-remote\config.json` and add:
+
+```json
+{
+  "auth_user": "operator",
+  "auth_password_hash": "pbkdf2-sha256$120000$Tk5Db21wVmQ...$qZ4AZP..."
+}
+```
+
+Restart the app. Load the web UI as
+`http://operator:your-password-here@host:8080/` the first time — the
+browser carries the credentials into the WebSocket upgrade only if
+they're in the URL.
+
+For HTTPS / WSS, set `cert_file` + `key_file` in the same config —
+see the project README's **"Securing the daemon"** section.
+
 ## Updating to a newer release
 
 Download the new zip and **unzip it over the old folder**, replacing

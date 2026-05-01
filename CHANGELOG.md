@@ -7,13 +7,44 @@ this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **HTTP Basic auth** on every web UI and REST endpoint, and on the
+  WebSocket upgrade. Off by default; enable by setting `auth_user`
+  + `auth_password_hash` in `config.json` (or via `--auth-user` /
+  `--auth-password` on the daemon CLI). Hashes use PBKDF2-SHA256
+  with 120k iterations and a 16-byte random salt; the iteration
+  count is stored in the hash so cost can be raised later without
+  invalidating existing config.
+- **`--hash-password`** CLI flag on `spe-remoted` — generates a
+  hash for pasting into `config.json`, never persists plaintext.
+- **Optional TLS** on both HTTP (now HTTPS) and WebSocket (now WSS).
+  Set `cert_file` + `key_file` in `config.json` (PEM, RSA or EC).
+  Falls back to plain HTTP/WS with a stderr line if cert/key load
+  fails rather than refusing to start.
+- **`/api/health`** endpoint — unauthenticated so monitoring tools
+  keep working: returns `{ok, connected, secure, auth}`.
+- **`/api/config`** now also reports `{auth, secure}` so the web UI
+  can surface the security state.
 - GitHub Actions CI: every push to `main` builds Windows x64, Linux
   x64, and Linux ARM64 (Pi) so regressions are caught before tagging.
 - GitHub Actions release workflow: pushing a `v*` tag builds binaries
-  on all three platforms and attaches them to the GitHub Release.
+  on all three platforms (plus macOS arm64) and attaches them to the
+  GitHub Release.
 - `INSTALL-WINDOWS.md` — download / unzip / run walkthrough,
   SmartScreen and FTDI driver notes, build-from-source appendix.
 - `CHANGELOG.md` — this file.
+
+### Fixed
+- `HttpServer::listen()` — `QAbstractHttpServer::bind()` returns
+  `void` in Qt 6.5+, not `bool`. The `QTcpServer::listen()` check
+  earlier in the function already handles the only real failure
+  path; this was a latent build error against modern Qt.
+
+### Notes
+- Browsers do not propagate the `Authorization` header onto
+  WebSocket upgrades from JavaScript. With auth enabled, load the
+  bundled web UI as `http://user:pass@host:port/` so the browser
+  carries the credentials onto the WS connection. A real login flow
+  in the web UI is on the roadmap for the next release.
 
 ## [1.3.0] — 2026-04-30
 

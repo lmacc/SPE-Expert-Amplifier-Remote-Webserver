@@ -182,17 +182,86 @@ Edit `/etc/systemd/system/spe-remoted.service` to change the serial device
 or ports; `systemctl daemon-reload && systemctl restart spe-remoted` to
 apply.
 
-## Reaching the amp from outside the LAN
+## Securing the daemon
 
-**Do not port-forward `:8888` or `:8080` to the public internet.** There is
-no authentication — anyone reaching the WebSocket can key your PA.
+The HTTP server and WebSocket bridge support **HTTP Basic auth** and
+**optional TLS**. They're off by default — fine for a LAN behind a
+home router. Turn them on before exposing the daemon to anything else.
 
-The right answers, in order of effort:
+### Step 1 — Add a password
 
-1. **VPN** (Tailscale or WireGuard) on both the Pi and the mobile device.
-   Zero code changes, full LAN access anywhere. This is how I deploy it.
-2. **Cloudflare Tunnel** with Cloudflare Access (identity check) in front.
-3. Wait for TLS + basic-auth to be added here (planned, not implemented yet).
+Generate a hash, no plaintext on disk:
+
+```bash
+spe-remoted --hash-password "your-password-here"
+# pbkdf2-sha256$120000$Tk5Db21wVmQ...$qZ4AZP...
+```
+
+Drop the line into `config.json`:
+
+```json
+{
+  "auth_user": "operator",
+  "auth_password_hash": "pbkdf2-sha256$120000$Tk5Db21wVmQ...$qZ4AZP..."
+}
+```
+
+`systemctl restart spe-remoted` and every request now needs Basic
+auth. The web UI: open `http://operator:your-password-here@pi.local:8080/`
+the first time — browsers don't propagate the `Authorization` header
+to the WebSocket upgrade unless you give them the credentials in the
+URL.
+
+### Step 2 — Add TLS
+
+For internet exposure (or anywhere you don't trust the link), turn on
+HTTPS+WSS. Generate a self-signed cert valid for 5 years:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -keyout /var/lib/spe-remote/key.pem \
+  -out    /var/lib/spe-remote/cert.pem \
+  -days 1825 \
+  -subj "/CN=spe-remote.local"
+sudo chown spe-remote:spe-remote /var/lib/spe-remote/{key,cert}.pem
+sudo chmod 600 /var/lib/spe-remote/key.pem
+```
+
+Wire them into `config.json`:
+
+```json
+{
+  "cert_file": "/var/lib/spe-remote/cert.pem",
+  "key_file":  "/var/lib/spe-remote/key.pem"
+}
+```
+
+The daemon now serves `https://` on port 8080 and `wss://` on port
+8888. Self-signed certs trigger a browser warning the first time —
+accept it once and it's cached. For a public-facing setup, get a real
+cert from Let's Encrypt and point `cert_file` / `key_file` at the
+issued PEMs.
+
+### Step 3 — Verify
+
+```bash
+curl https://operator:pw@pi.local:8080/api/health
+# {"ok":true,"connected":true,"secure":true,"auth":true}
+```
+
+`/api/health` is intentionally unauthenticated so uptime checks
+(systemd `ExecStartPost`, Prometheus blackbox-exporter, etc.) keep
+working without a password.
+
+### When to reach for what
+
+| Scenario | Recommended setup |
+|---|---|
+| Same Wi-Fi as the amp, only one operator | Defaults — no auth, no TLS. |
+| Multiple operators on the home LAN | Auth on, TLS off. |
+| Reachable via VPN (Tailscale / WireGuard) | Auth on, TLS off (the VPN handles encryption). |
+| Reachable via Cloudflare Tunnel + Access | Auth off, TLS off (Cloudflare handles both). |
+| Direct internet exposure | Auth **and** TLS, real cert, audit your firewall. |
 
 ## Front-panel controls
 

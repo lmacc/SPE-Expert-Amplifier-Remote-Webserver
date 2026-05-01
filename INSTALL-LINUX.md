@@ -154,6 +154,34 @@ When running under systemd the config file moves to
 `/var/lib/spe-remote/spe-remote/config.json` (the unit sets
 `XDG_CONFIG_HOME` so the sandbox can write there).
 
+## Adding a password (optional)
+
+If anyone else is on the network, gate the daemon behind HTTP Basic
+auth. Generate a hash without writing the plaintext anywhere:
+
+```bash
+spe-remoted --hash-password "your-password-here"
+# pbkdf2-sha256$120000$Tk5Db21wVmQ...$qZ4AZP...
+```
+
+Add to `~/.config/spe-remote/config.json` (or the systemd path
+above):
+
+```json
+{
+  "auth_user": "operator",
+  "auth_password_hash": "pbkdf2-sha256$120000$Tk5Db21wVmQ...$qZ4AZP..."
+}
+```
+
+Restart the daemon. Browsers don't carry the `Authorization` header
+onto the WebSocket upgrade unless you put credentials in the URL —
+load `http://operator:your-password-here@host:8080/` the first time.
+
+For HTTPS / WSS, generate a cert and set `cert_file` + `key_file` in
+the same config; see the project README's **"Securing the daemon"**
+section for the recipe.
+
 ## Updating to a newer release
 
 The current release tag is shown on

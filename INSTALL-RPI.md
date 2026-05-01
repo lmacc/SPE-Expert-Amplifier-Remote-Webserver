@@ -96,6 +96,35 @@ The relevant knobs are documented inline in the file. The unit also
 allows access to `/dev/ttyUSB0`, `/dev/ttyUSB1`, `/dev/ttyAMA0`, and
 `/dev/serial0` out of the box.
 
+## Adding a password (optional)
+
+If more than one person is on the network, gate the daemon behind
+HTTP Basic auth. Generate a hash without writing the plaintext to
+disk:
+
+```bash
+spe-remoted --hash-password "your-password-here"
+# pbkdf2-sha256$120000$Tk5Db21wVmQ...$qZ4AZP...
+```
+
+Edit `/var/lib/spe-remote/config.json`:
+
+```json
+{
+  "auth_user": "operator",
+  "auth_password_hash": "pbkdf2-sha256$120000$Tk5Db21wVmQ...$qZ4AZP..."
+}
+```
+
+`sudo systemctl restart spe-remoted`. To get into the web UI from a
+browser the first time, paste credentials into the URL so the
+WebSocket upgrade carries them along:
+`http://operator:your-password-here@spe-remote.local:8080/`.
+
+For TLS / wss, generate a self-signed cert (or drop in a Let's
+Encrypt one) and set `cert_file` + `key_file` in the same config —
+see the project README's "Securing the daemon" section.
+
 ## Updating to a newer release
 
 `install-pi.sh` is idempotent — re-running it on a freshly checked-out
