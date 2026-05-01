@@ -1,0 +1,406 @@
+/* SPE Expert remote — synthetic front-panel UI.
+ *
+ * Drops the photograph in favour of a CSS-drawn amp face: dark chassis
+ * background, brushed-metal accents, two button clusters flanking a
+ * dark-green LCD, status LEDs + settings cog along the bottom strip.
+ *
+ * Layout: a 12-column flexbox on desktop (3 cols left / 6 cols LCD /
+ * 3 cols right). Below 600 px the row collapses — LCD on top, then both
+ * button clusters as full-width grids underneath, so tap targets stay
+ * finger-sized on phones.
+ *
+ * No images are loaded; the panel is a single light-DOM widget.
+ */
+
+/* ── Container / chassis ─────────────────────────────────────────── */
+.amp-chassis {
+  width: 100%;
+  max-width: 980px;
+  margin: 12px auto 0;
+  padding: 14px 18px 12px;
+  border: 1px solid #353842;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, #2a2d35 0%, #1a1d23 18%, #1a1d23 82%, #14161b 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 4px 14px rgba(0,0,0,0.45);
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.amp-brand {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #9aa0ac;
+  margin-bottom: 10px;
+  text-align: left;
+}
+
+/* The main row: left cluster | LCD | right cluster */
+.amp-panel {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+}
+
+/* ── Button clusters ─────────────────────────────────────────────── */
+.btn-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 110px;          /* fixed cluster width on desktop */
+}
+.btn-cluster.right {
+  flex: 0 0 110px;
+}
+
+/* Real <button>s — 3D-ish, brushed-metal feel. Hover/pressed states
+ * mirror the Qt widget's QPushButton stylesheet so the two UIs feel
+ * the same. */
+.amp-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;              /* cluster items split the column equally */
+  min-height: 44px;         /* accessible touch target */
+  padding: 6px 8px;
+  border: 1px solid #4a4e58;
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, #4a4e58 0%, #3a3e48 35%, #2a2d35 100%);
+  color: #e6e7ea;
+  font: 600 13px/1.05 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 1px 2px rgba(0,0,0,0.55);
+  transition: background 100ms ease-out,
+              border-color 100ms ease-out,
+              box-shadow 100ms ease-out,
+              transform 80ms ease-out;
+}
+.amp-btn small {
+  display: block;
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  color: #4ea1ff;
+}
+.amp-btn:hover,
+.amp-btn:focus-visible {
+  border-color: #4ea1ff;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    0 0 0 2px rgba(78,161,255,0.30),
+    0 1px 2px rgba(0,0,0,0.55);
+  outline: none;
+}
+.amp-btn:active,
+.amp-btn.btn-pending {
+  background:
+    linear-gradient(180deg, #2a2d35 0%, #1f2228 100%);
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 3px rgba(0,0,0,0.55),
+    0 0 0 2px rgba(78,161,255,0.55);
+}
+
+/* OP tints amber while op_status == "Oper" so the operator can see at
+ * a glance whether the amp is keyed up. */
+.amp-btn.active {
+  background:
+    linear-gradient(180deg, #b8852e 0%, #8a6020 100%);
+  border-color: #e8b048;
+  color: #fff8e0;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    0 0 0 2px rgba(255,180,60,0.45),
+    0 1px 2px rgba(0,0,0,0.55);
+}
+
+/* OFF gets a red accent. Confirm dialog protects against accidental
+ * presses; the visual treatment makes the consequences obvious. */
+.amp-btn.danger {
+  border-color: #6a3232;
+}
+.amp-btn.danger:hover,
+.amp-btn.danger:focus-visible {
+  border-color: #e66060;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 0 0 2px rgba(230,96,96,0.35),
+    0 1px 2px rgba(0,0,0,0.55);
+}
+.amp-btn.danger:active,
+.amp-btn.danger.btn-pending {
+  box-shadow:
+    inset 0 1px 3px rgba(0,0,0,0.55),
+    0 0 0 2px rgba(230,96,96,0.65);
+}
+
+/* ── LCD ─────────────────────────────────────────────────────────── */
+.amp-lcd {
+  flex: 1 1 auto;
+  min-width: 0;             /* allow shrinking inside flexbox */
+  background: #0a1a0c;
+  border: 1px solid #24331a;
+  border-radius: 4px;
+  color: #86f98a;
+  font-family: "Consolas", "SF Mono", "Menlo", monospace;
+  font-size: 13px;
+  line-height: 1.25;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 6px rgba(0,0,0,0.65),
+    inset 0 0 24px rgba(0,80,40,0.10);
+}
+
+.lcd-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 16px;
+}
+/* Width sized for the longest label we use ("SWR") so all three bar
+ * rows align their bar-start columns. PA and I stay right-aligned in
+ * the same column, with a bit of extra left-padding — visually
+ * indistinguishable from before. */
+.lcd-k  { width: 28px;  color: #c8ffc8; font-weight: 700; text-align: right; }
+.lcd-u  { width: 12px;  color: #c8ffc8; font-size: 11px; }
+.lcd-v  {
+  min-width: 48px;
+  text-align: right;
+  color: #fffad0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bar wrapper — same logic as before (PA OUT + I PA). */
+.lcd-bar-wrap {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  background: #06120a;
+  border: 1px solid #1b3520;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.lcd-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, #4fb24f, #86f98a);
+  transition: width 180ms ease-out, background 200ms ease-out;
+}
+.lcd-bar.bar-warn    { background: linear-gradient(90deg, #d9b54a, #ffe07a); }
+.lcd-bar.bar-danger  { background: linear-gradient(90deg, #d14a4a, #ff8585); }
+.lcd-bar-amber       { background: linear-gradient(90deg, #d19a4a, #ffd185); }
+.lcd-tick {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: rgba(255,255,255,0.18);
+}
+
+/* Each stats row holds four cells distributed evenly across the LCD —
+ * matches the four-column layout the Qt LcdWidget paints (BAND / TUNE /
+ * ANT / INP and T / V / SWR / TX). Switch from flex+wrap (which packed
+ * everything to the left) to a 4-column grid so the cells line up at
+ * fixed quarter positions on both rows. */
+.lcd-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px 8px;
+  font-size: 12px;
+}
+.lcd-stats > * {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lcd-stats span b {
+  color: #fffad0;
+  font-weight: 700;
+}
+.lcd-tx {
+  /* TX pill sits in the last grid cell, right-aligned so the coloured
+   * background hugs the right edge of the LCD like the Qt version. */
+  justify-self: end;
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-weight: 700;
+  font-size: 11px;
+}
+.lcd-tx.tx-on  { background: #a83232; color: #fff; }
+.lcd-tx.tx-off { background: #1d2d1a; color: #86f98a; }
+
+.lcd-err {
+  color: #ff8585;
+  font-size: 11px;
+  margin-top: auto;
+}
+
+/* ── Secondary key strip: menu / setup keys (guide §4) ───────────── */
+/* ATU L/C trim, ←/→ menu navigation, SET, DISPLAY backlight toggle.
+ * Smaller and flatter than .amp-btn so they read as setup-time keys
+ * rather than primary operate keys, but keep min-height tap-target
+ * friendly on touch. */
+.amp-menu {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 4px 0;
+  border-top: 1px solid #2a2d35;
+  flex-wrap: wrap;
+}
+.amp-menu .menu-label {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #6a6f78;
+  padding-right: 4px;
+}
+.amp-menu .menu-btn {
+  flex: 0 0 auto;
+  min-width: 48px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid #353841;
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, #353841 0%, #23262d 100%);
+  color: #c2c6cf;
+  font: 500 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+}
+.amp-menu .menu-btn:hover {
+  border-color: #4ea1ff;
+  color: #fff;
+}
+.amp-menu .menu-btn:active {
+  background:
+    linear-gradient(180deg, #1f2228 0%, #16181d 100%);
+  border-color: #4ea1ff;
+}
+
+/* ── Bottom strip: LEDs + brand + settings cog ───────────────────── */
+.amp-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid #2a2d35;
+  font-size: 11px;
+  color: #9aa0ac;
+}
+
+.amp-foot .led-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.led {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #4a4e58;
+  box-shadow:
+    inset 0 1px 1px rgba(0,0,0,0.55),
+    0 0 0 1px rgba(0,0,0,0.40);
+  flex-shrink: 0;
+  transition: background 240ms ease-out, box-shadow 240ms ease-out;
+}
+.led.flash-rx,
+.led.on-rx {
+  background: #4ecc7b;
+  box-shadow: 0 0 8px #4ecc7b, 0 0 0 1px rgba(0,0,0,0.40);
+  transition: none;
+}
+.led.flash-tx,
+.led.on-tx {
+  background: #4ea1ff;
+  box-shadow: 0 0 8px #4ea1ff, 0 0 0 1px rgba(0,0,0,0.40);
+  transition: none;
+}
+.led.on    { background: #4ecc7b; box-shadow: 0 0 6px #4ecc7b, 0 0 0 1px rgba(0,0,0,0.40); }
+.led.warn  { background: #e8c533; box-shadow: 0 0 6px #e8c533, 0 0 0 1px rgba(0,0,0,0.40); }
+.led.err   { background: #e66060; box-shadow: 0 0 6px #e66060, 0 0 0 1px rgba(0,0,0,0.40); }
+
+.led-label {
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: #9aa0ac;
+}
+
+.amp-foot .spacer { flex: 1; }
+.amp-foot .brand-text {
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: #6a6f78;
+}
+
+.amp-foot .cog {
+  color: #4ea1ff;
+  text-decoration: none;
+  font-size: 18px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.amp-foot .cog:hover { background: #2c3039; }
+
+/* ── Mobile reflow (<600 px) ─────────────────────────────────────── */
+/* Stack: LCD, then both clusters as horizontal grids of full-width
+ * buttons. Buttons stay min 44 px tall — accessible thumb targets. */
+@media (max-width: 600px) {
+  .amp-chassis { padding: 10px 10px 8px; margin-top: 6px; border-radius: 6px; }
+  .amp-brand   { font-size: 10px; margin-bottom: 6px; }
+  .amp-panel   { flex-direction: column; gap: 8px; }
+  .btn-cluster {
+    flex: 0 0 auto;
+    flex-direction: row;
+    gap: 6px;
+  }
+  .amp-btn {
+    flex: 1 1 0;
+    min-height: 48px;        /* a touch bigger for thumbs */
+    font-size: 12px;
+  }
+  .amp-lcd { font-size: 12px; padding: 6px 8px; }
+  .lcd-row { min-height: 14px; gap: 4px; }
+  .lcd-stats { font-size: 11px; gap: 3px 8px; }
+  .lcd-v   { min-width: 40px; }
+  .amp-foot { font-size: 10px; gap: 6px; flex-wrap: wrap; }
+  .amp-foot .brand-text { display: none; }
+}
+
+/* Phones in portrait — keep buttons readable. */
+@media (max-width: 360px) {
+  .amp-btn { font-size: 11px; min-height: 44px; padding: 4px 6px; }
+  .amp-lcd { font-size: 11px; }
+  .lcd-bar-wrap { height: 8px; }
+}

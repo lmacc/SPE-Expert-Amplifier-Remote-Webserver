@@ -1,0 +1,54 @@
+[Unit]
+Description=SPE 1.3K-2K-FA remote daemon (serial + WebSocket + HTTP bridge)
+Documentation=https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Pi user already has dialout via install-pi.sh. Change if you use a
+# dedicated service account.
+User=pi
+Group=dialout
+
+# Environment
+# SPE_SERIAL: USB-to-serial device on the Pi. /dev/ttyUSB0 is the default.
+# SPE_WS_PORT: WebSocket endpoint, keep in sync with any existing ESP8266 or
+#              web-client configs (default 8888).
+# SPE_HTTP_PORT: HTTP port for the browser UI. Set to 0 to disable.
+Environment=SPE_WS_PORT=8888
+Environment=SPE_HTTP_PORT=8080
+# Redirect QStandardPaths::AppConfigLocation into the managed state dir so
+# ConfigStore can persist the port/baud picked in the web UI even with
+# ProtectHome=true. Resolves to /var/lib/spe-remote/spe-remote/config.json.
+Environment=XDG_CONFIG_HOME=/var/lib/spe-remote
+StateDirectory=spe-remote
+
+# No --serial-port flag here on purpose: the first-run operator sets it
+# from the web Settings page, and ConfigStore persists it. Add one here
+# only if you want to pin a device at the systemd level.
+ExecStart=/usr/local/bin/spe-remoted \
+    --ws-port ${SPE_WS_PORT} \
+    --http-port ${SPE_HTTP_PORT}
+
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+# Light sandboxing — the daemon only needs the serial device and the network.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+DeviceAllow=/dev/ttyUSB0 rw
+DeviceAllow=/dev/ttyUSB1 rw
+DeviceAllow=/dev/ttyAMA0 rw
+DeviceAllow=/dev/serial0 rw
+
+[Install]
+WantedBy=multi-user.target

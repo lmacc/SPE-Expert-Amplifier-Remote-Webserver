@@ -1,0 +1,48 @@
+# Build outputs
+build/
+build-*/
+out/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+_deps/
+install_manifest.txt
+CMakeUserPresets.json
+
+# Qt Creator / Qt user-local files
+.qtcreator/
+*.user
+*.user.*
+*.autosave
+*.qmlproject.user
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# Visual Studio / VS Code / CLion
+.vs/
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+

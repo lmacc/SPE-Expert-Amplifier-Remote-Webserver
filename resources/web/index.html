@@ -1,0 +1,385 @@
+<!doctype html>
+<html>
+  <head>
+    <title>SPE 1.5K-FA - Remote by EI5GJB</title>
+    <meta charset="utf-8" />
+    <!-- Mobile viewport. Without this the page renders at desktop width
+         (~547 px wrapper) and then shrinks to fit, which gives a tiny,
+         un-readable UI on phones. With it, the media queries in app.css
+         kick in and the layout reflows. user-scalable is left alone so
+         ops who want to zoom the power scale still can. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style type="text/css">
+      /* Page-level chrome only. Everything else lives in app.css so the
+         Qt port and the web UI can share the same colour vocabulary
+         when convenient. */
+      body {
+        margin: 0;
+        text-align: center;
+        background: #0b0d12;          /* outside the chassis: matte black */
+        color: #e6e7ea;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.4/angular.min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+
+    <script>
+    // Max values for the LCD bars. PA OUT and I PA match the scale
+    // printed on the real amp face. SWR maps 1.00–3.00 across the bar
+    // (anything above 3.0 clamps full, which is well into "stop
+    // transmitting" territory anyway).
+    var PA_OUT_MAX = 1500;
+    var I_PA_MAX   = 50;
+    var SWR_MAX    = 3.0;
+    var spe_d;
+
+    var module = angular.module('myApp', []);
+    module.controller('myCtrl', function ($scope) {
+      // Default readings shown before the first status frame arrives
+      // (cold start / amp off / no serial port). The onmessage handler
+      // overwrites these once the daemon is up.
+      $scope.pwr        = "---";       // PWR level: HIGH/MID/LOW
+      $scope.tuneStatus = "--";
+      $scope.status = {
+        p_out: "0000", aswr: "--", band: "--", tx_status: "--",
+        tx_antenna: "--", input: "--", pa_temp: "--", voltage: "--",
+        drain: "--", error: "", warnings: ""
+      };
+
+      window.onload = function () {
+        $(function () {
+          var ws;
+
+          // ── LED helpers ───────────────────────────────────────
+          // RX pulses on every status/ack frame from the amp.
+          // TX pulses on every command we send (button click).
+          // Both pulses last ~250 ms — long enough to see, short enough
+          // not to merge into a steady glow during heavy traffic.
+          function flashLed(id, cls) {
+            var el = document.getElementById(id);
+            if (!el) { return; }
+            el.classList.remove(cls);
+            // Force reflow so the CSS transition restarts even when two
+            // events land in the same frame.
+            void el.offsetWidth;
+            el.classList.add(cls);
+            setTimeout(function () { el.classList.remove(cls); }, 250);
+          }
+          var pulseRx = function () { flashLed("rx_led", "flash-rx"); };
+          var pulseTx = function () { flashLed("tx_led", "flash-tx"); };
+
+          // Paint the two LCD bars (PA OUT + I PA current) from a status
+          // JSON payload.
+          function paintLcd(json) {
+            var pa = parseFloat(json.p_out);
+            if (isNaN(pa)) { pa = 0; }
+            var paPct = Math.min(100, Math.max(0, (pa / PA_OUT_MAX) * 100));
+            $("#pa_out_bar").css("width", paPct + "%");
+            $("#pa_out_val").text(pa > 0 ? pa : "0000");
+            $("#pa_out_bar")
+              .toggleClass("bar-danger",  pa > 1400)
+              .toggleClass("bar-warn",    pa > 1200 && pa <= 1400)
+              .toggleClass("bar-ok",      pa > 0    && pa <= 1200);
+
+            var ipa = parseFloat(json.drain);
+            if (isNaN(ipa)) { ipa = 0; }
+            var ipaPct = Math.min(100, Math.max(0, (ipa / I_PA_MAX) * 100));
+            $("#i_pa_bar").css("width", ipaPct + "%");
+            $("#i_pa_val").text(ipa > 0 ? ipa.toFixed(1) : "--.-");
+
+            // SWR bar — uses aswr (post-ATU SWR at the antenna).
+            // 1.00–3.00 maps across the bar. RX-mode reports 0.00, in
+            // which case we show "--.--" with an empty bar.
+            var swr = parseFloat(json.aswr);
+            if (isNaN(swr)) { swr = 0; }
+            var swrPct = (swr > 0)
+              ? Math.min(100, Math.max(0,
+                  ((swr - 1.0) / (SWR_MAX - 1.0)) * 100))
+              : 0;
+            $("#swr_bar").css("width", swrPct + "%");
+            $("#swr_val").text(swr > 0 ? swr.toFixed(2) : "--.--");
+            $("#swr_bar")
+              .toggleClass("bar-danger", swr > 2.0)
+              .toggleClass("bar-warn",   swr > 1.5 && swr <= 2.0)
+              .toggleClass("bar-ok",     swr > 0   && swr <= 1.5);
+
+            // TX/RX accent colour on the LCD's TX cell.
+            var $tx = $("#lcd_tx");
+            $tx.removeClass("tx-on tx-off");
+            if (json.tx_status === "TX") { $tx.addClass("tx-on"); }
+            else                         { $tx.addClass("tx-off"); }
+
+            $scope.tuneStatus = (json.tune_status && json.tune_status !== "")
+                                  ? json.tune_status : "--";
+
+            // OP tints amber while the amp reports Operate.
+            $("#oper_btn").toggleClass("active", json.op_status === "Oper");
+          }
+
+          var logger = function (msg) {
+            var json_parsed = JSON.parse(msg);
+
+            // Any frame from the amp pulses the RX LED. Status frames
+            // also carry op_status/p_level/etc.; ACK-only frames don't,
+            // so they short-circuit the gauge update.
+            pulseRx();
+
+            if (json_parsed.ack && !json_parsed.op_status) {
+              return;
+            }
+
+            spe_d = json_parsed;
+            var pwr_code = json_parsed["p_level"];
+            $scope.status = spe_d;
+            if      (pwr_code === "H") { $scope.pwr = "HIGH"; }
+            else if (pwr_code === "M") { $scope.pwr = "MID";  }
+            else if (pwr_code === "L") { $scope.pwr = "LOW";  }
+            else                       { $scope.pwr = "---";  }
+
+            paintLcd(json_parsed);
+            $scope.$apply();
+          };
+
+          var sender = function (msg) { ws.send(msg); pulseTx(); };
+
+          var flashPending = function (btnId) {
+            var $b = $("#" + btnId);
+            $b.addClass("btn-pending");
+            setTimeout(function () { $b.removeClass("btn-pending"); }, 500);
+          };
+
+          // WebSocket URL derived from the page host. Override by passing
+          // ?ws=ws://host:port/ws in the query string.
+          var _wsOverride = new URLSearchParams(window.location.search).get("ws");
+          var _wsProto    = window.location.protocol === "https:" ? "wss:" : "ws:";
+          var _wsDefault  = _wsProto + "//" + window.location.hostname + ":8888/ws";
+          ws = new WebSocket(_wsOverride || _wsDefault);
+
+          ws.onmessage = function (evt) { logger(evt.data); };
+          ws.onclose   = function ()    { console.log("Websocket Close."); };
+          ws.onopen    = function ()    { console.log("Websocket Open.");  };
+
+          // ── Buttons → sender() ────────────────────────────────
+          // 7-button front panel: 3 left (INPUT/ANT/TUNE), 4 right
+          // (PWR/CAT/OP/OFF). Wire token "gain" stays for backwards
+          // compat with old WS clients (ESP8266 + the original web UI);
+          // the new label is just "PWR".
+          function bind(id, token) {
+            $("#" + id).click(function () { flashPending(id); sender(token); });
+          }
+          bind("input_btn",   "input");
+          bind("antenna_btn", "antenna");
+          bind("tune_btn",    "tune");
+          bind("pwr_btn",     "gain");    // wire token kept as "gain"
+          bind("cat_btn",     "cat");     // 0x0E per mfr §4
+          bind("oper_btn",    "oper");
+          // ON pulses DTR on the daemon side (no opcode in the SPE
+          // programmer's guide — community workaround).
+          bind("power_on_btn", "on");
+
+          // Secondary menu / setup keys — verbatim from guide §4.
+          bind("menu_left",   "left");
+          bind("menu_right",  "right");
+          bind("menu_set",    "set");
+          bind("menu_disp",   "display");
+          bind("menu_lminus", "l-");
+          bind("menu_lplus",  "l+");
+          bind("menu_cminus", "c-");
+          bind("menu_cplus",  "c+");
+
+          // OFF gets an explicit confirm() gate — a stray touch on the
+          // amp face mustn't be able to kill the amp.
+          $("#power_off_btn").click(function () {
+            if (!confirm("Shut the amplifier down?\n\n" +
+                         "This sends POWER OFF (0x0C). You'll need to walk " +
+                         "over and press the physical power button to bring " +
+                         "it back up.")) {
+              return;
+            }
+            flashPending("power_off_btn");
+            sender("off");
+          });
+        });
+      };
+    });
+    </script>
+<!-- Bootstrap 4 was used for the old button group / badges; the
+     amp-face UI doesn't need it, so it's dropped to keep the page
+     snappy on a cold LTE connection. Reinstate if you add Bootstrap
+     components later. -->
+<link href="css/app.css" rel="stylesheet">
+</head>
+<body>
+<div ng-app="myApp" ng-controller="myCtrl">
+<!-- ================================================================= -->
+<!-- Synthetic amp face — pure HTML/CSS, no photograph. Two clusters    -->
+<!-- of real <button> elements flank a central LCD. Bottom strip holds  -->
+<!-- RX/TX activity LEDs, connection status, and the settings cog.      -->
+<!-- Below 600 px the row stacks: LCD on top, then both clusters as     -->
+<!-- horizontal grids (see app.css media query).                        -->
+<!-- ================================================================= -->
+<div class="amp-chassis">
+  <div class="amp-brand">SPE Expert 1.3K-FA · Remote</div>
+
+  <div class="amp-panel">
+    <!-- LEFT cluster — operator controls -->
+    <div class="btn-cluster left">
+      <button class="amp-btn" id="input_btn"   title="Cycle radio input">INPUT</button>
+      <button class="amp-btn" id="antenna_btn" title="Cycle TX antenna">ANT</button>
+      <button class="amp-btn" id="tune_btn"    title="Tune ATU">TUNE</button>
+    </div>
+
+    <!-- LCD -->
+    <div class="amp-lcd" aria-live="polite">
+      <!-- PA OUT bar (0–1500 W) -->
+      <div class="lcd-row">
+        <span class="lcd-k">PA</span>
+        <div class="lcd-bar-wrap">
+          <div class="lcd-bar" id="pa_out_bar" style="width:0%"></div>
+          <span class="lcd-tick" style="left:25%"></span>
+          <span class="lcd-tick" style="left:50%"></span>
+          <span class="lcd-tick" style="left:75%"></span>
+        </div>
+        <span class="lcd-v" id="pa_out_val">0000</span>
+        <span class="lcd-u">W</span>
+      </div>
+      <!-- I PA bar (0–50 A) -->
+      <div class="lcd-row">
+        <span class="lcd-k">I</span>
+        <div class="lcd-bar-wrap">
+          <div class="lcd-bar lcd-bar-amber" id="i_pa_bar" style="width:0%"></div>
+          <span class="lcd-tick" style="left:25%"></span>
+          <span class="lcd-tick" style="left:50%"></span>
+          <span class="lcd-tick" style="left:75%"></span>
+        </div>
+        <span class="lcd-v" id="i_pa_val">--.-</span>
+        <span class="lcd-u">A</span>
+      </div>
+      <!-- SWR bar (1.00–3.00, anything > 3.0 clamps full).
+           Colour ramps green ≤ 1.5, amber ≤ 2.0, red > 2.0. -->
+      <div class="lcd-row">
+        <span class="lcd-k">SWR</span>
+        <div class="lcd-bar-wrap">
+          <div class="lcd-bar" id="swr_bar" style="width:0%"></div>
+          <span class="lcd-tick" style="left:25%"></span>
+          <span class="lcd-tick" style="left:50%"></span>
+          <span class="lcd-tick" style="left:75%"></span>
+        </div>
+        <span class="lcd-v" id="swr_val">--.--</span>
+        <span class="lcd-u"></span>
+      </div>
+      <!-- Stats row 1: band / tune / ant / inp -->
+      <div class="lcd-row lcd-stats">
+        <span>BAND <b>{{status.band}}</b></span>
+        <span>TUNE <b>{{tuneStatus}}</b></span>
+        <span>ANT <b>{{status.tx_antenna}}</b></span>
+        <span>INP <b>{{status.input}}</b></span>
+      </div>
+      <!-- Stats row 2: temp / volts / tx/rx (SWR moved up to its bar). -->
+      <div class="lcd-row lcd-stats">
+        <span>T <b>{{status.pa_temp}}</b>&deg;</span>
+        <span>V <b>{{status.voltage}}</b></span>
+        <span></span>
+        <span class="lcd-tx" id="lcd_tx">{{status.tx_status}}</span>
+      </div>
+      <!-- Error/warning strip (only shown when non-empty) -->
+      <div class="lcd-row lcd-err" ng-show="status.error || status.warnings">
+        <span>{{status.error}} {{status.warnings}}</span>
+      </div>
+    </div>
+
+    <!-- RIGHT cluster — power / CAT / op-mode / shutdown -->
+    <div class="btn-cluster right">
+      <button class="amp-btn" id="pwr_btn" title="Cycle PWR level (HIGH / MID / LOW)">
+        PWR<small>{{pwr}}</small>
+      </button>
+      <button class="amp-btn" id="cat_btn"        title="Toggle CAT / RIG-control">CAT</button>
+      <button class="amp-btn" id="oper_btn"       title="Operate / Standby">OP</button>
+      <button class="amp-btn" id="power_on_btn"   title="Power ON — pulses DTR to wake the amp">ON</button>
+      <button class="amp-btn danger" id="power_off_btn" title="Power OFF — confirms first">OFF</button>
+    </div>
+  </div><!-- /.amp-panel -->
+
+  <!-- Secondary key strip — menu / setup keys from guide §4. Smaller
+       and flatter than the primary chassis buttons; secondary visual
+       weight to communicate "tuning / setup" rather than "operate". -->
+  <div class="amp-menu" aria-label="Menu and tuning keys">
+    <span class="menu-label">Menu</span>
+    <button class="menu-btn" id="menu_left"  title="LEFT arrow (menu navigation)">&larr;</button>
+    <button class="menu-btn" id="menu_right" title="RIGHT arrow (menu navigation)">&rarr;</button>
+    <button class="menu-btn" id="menu_set"   title="SET key — enter / accept setup screens">SET</button>
+    <button class="menu-btn" id="menu_disp"  title="DISPLAY backlight toggle">DISP</button>
+    <button class="menu-btn" id="menu_lminus" title="ATU inductor trim DOWN">L&minus;</button>
+    <button class="menu-btn" id="menu_lplus"  title="ATU inductor trim UP">L+</button>
+    <button class="menu-btn" id="menu_cminus" title="ATU capacitor trim DOWN">C&minus;</button>
+    <button class="menu-btn" id="menu_cplus"  title="ATU capacitor trim UP">C+</button>
+  </div>
+
+  <!-- Bottom strip: activity LEDs + connection status + settings cog.
+       The connection LED + label are driven by polling /api/config so
+       the user sees "port busy" / "no port selected" without opening
+       devtools. RX / TX pulses are driven by the WebSocket handler. -->
+  <div class="amp-foot">
+    <span class="led-group" title="Pulses on every frame received from the amp">
+      <span class="led" id="rx_led"></span>
+      <span class="led-label">RX</span>
+    </span>
+    <span class="led-group" title="Pulses on every command sent to the amp">
+      <span class="led" id="tx_led"></span>
+      <span class="led-label">TX</span>
+    </span>
+    <span class="led-group" title="Serial connection state">
+      <span class="led warn" id="conn_led"></span>
+      <span class="led-label" id="conn_msg">Checking daemon…</span>
+    </span>
+    <span class="spacer"></span>
+    <span class="brand-text">SPE Remote · Qt6 port</span>
+    <a class="cog" href="/settings.html" title="Settings (port / baud)">&#9881;</a>
+  </div>
+</div>
+
+<script>
+// Daemon-config poller: keeps the bottom-strip "conn" LED + label in
+// sync with the serial connection state reported by /api/config. Same
+// JSON contract as before; only the target DOM IDs have moved from the
+// old top-bar to the new bottom strip on the chassis.
+(function () {
+  var led = document.getElementById("conn_led");
+  var msg = document.getElementById("conn_msg");
+  function paint(cfg) {
+    led.classList.remove("on", "warn", "err");
+    if (cfg.connected) {
+      led.classList.add("on");
+      msg.textContent = (cfg.port || "serial") + " @ " + cfg.baud;
+    } else if (cfg.stopped) {
+      led.classList.add("warn");
+      msg.textContent = cfg.port ? "Disconnected" : "No port — click ⚙";
+    } else if (cfg.lastError) {
+      led.classList.add("err");
+      msg.textContent = cfg.lastError;
+    } else if (!cfg.port) {
+      led.classList.add("warn");
+      msg.textContent = "No port — click ⚙";
+    } else {
+      led.classList.add("warn");
+      msg.textContent = "Connecting…";
+    }
+  }
+  function poll() {
+    fetch("/api/config")
+      .then(function (r) { return r.json(); })
+      .then(paint)
+      .catch(function () {
+        led.classList.remove("on", "warn"); led.classList.add("err");
+        msg.textContent = "Daemon unreachable";
+      });
+  }
+  poll();
+  setInterval(poll, 1500);
+})();
+</script>
+
+</div><!-- /ng-app -->
+</body>
+</html>

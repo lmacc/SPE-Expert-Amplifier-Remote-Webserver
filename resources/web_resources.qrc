@@ -1,0 +1,13 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file>web/index.html</file>
+        <file>web/settings.html</file>
+        <file>web/css/app.css</file>
+        <file>web/css/settings.css</file>
+        <file>web/js/settings.js</file>
+        <file>web/justgage/justgage.js</file>
+        <file>web/justgage/raphael-2.1.4.min.js</file>
+        <file>web/img/spe-amp.png</file>
+    </qresource>
+</RCC>

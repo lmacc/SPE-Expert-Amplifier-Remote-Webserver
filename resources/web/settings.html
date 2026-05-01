@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SPE Remote — Settings</title>
+  <link rel="stylesheet" href="css/settings.css" />
+</head>
+<body>
+  <main class="card">
+    <header class="card-head">
+      <h1>Settings</h1>
+      <a class="back" href="/">← Back</a>
+    </header>
+
+    <section class="row">
+      <label for="portSel">Serial device</label>
+      <div class="combo">
+        <select id="portSel"></select>
+        <button id="refreshBtn" title="Rescan ports">↻</button>
+      </div>
+      <p id="portHint" class="hint"></p>
+    </section>
+
+    <section class="row">
+      <label for="baudSel">Baud rate</label>
+      <select id="baudSel">
+        <option>9600</option>
+        <option>19200</option>
+        <option>38400</option>
+        <option>57600</option>
+        <option selected>115200</option>
+      </select>
+      <p class="hint">SPE Expert amplifiers use 115200 by default.</p>
+    </section>
+
+    <section class="row status-row">
+      <span id="led" class="led"></span>
+      <span id="statusText">—</span>
+    </section>
+
+    <section class="row actions">
+      <button id="applyBtn" class="primary">Apply</button>
+      <button id="disconnectBtn">Disconnect</button>
+    </section>
+
+    <section class="row actions">
+      <button id="forgetBtn" class="danger" title="Clears the saved port from config.json so the daemon starts idle on next boot.">Forget saved port</button>
+    </section>
+
+    <p class="footnote">
+      Changes are saved to the daemon's config file and reapplied
+      automatically on reboot.
+    </p>
+  </main>
+
+  <script src="js/settings.js"></script>
+</body>
+</html>

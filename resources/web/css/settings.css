@@ -1,0 +1,167 @@
+:root {
+  --bg: #15171c;
+  --card: #23262f;
+  --card-border: #353842;
+  --fg: #e6e7ea;
+  --fg-dim: #9aa0ac;
+  --accent: #4ea1ff;
+  --ok: #4ecc7b;
+  --warn: #e8c533;
+  --err: #e66060;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 22px 22px 18px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 18px;
+}
+
+.card-head h1 { margin: 0; font-size: 22px; font-weight: 600; }
+
+.back {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 14px;
+}
+.back:hover { text-decoration: underline; }
+
+.row { margin: 14px 0; }
+.row label {
+  display: block;
+  font-size: 13px;
+  color: var(--fg-dim);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+select, input[type=text] {
+  width: 100%;
+  padding: 10px 12px;
+  background: #1a1d23;
+  color: var(--fg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  font-size: 15px;
+  outline: none;
+}
+select:focus { border-color: var(--accent); }
+
+.combo {
+  display: flex;
+  gap: 8px;
+}
+.combo select { flex: 1; }
+.combo button {
+  width: 42px;
+  background: #2c3039;
+  color: var(--fg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+}
+.combo button:hover { background: #343845; }
+
+.hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+.actions button {
+  flex: 1;
+  padding: 12px 18px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: #2c3039;
+  color: var(--fg);
+  font-size: 15px;
+  cursor: pointer;
+}
+.actions button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b1b2c;
+  font-weight: 600;
+}
+/* Destructive action (Forget saved port) — outlined red so it reads as
+   different from Apply/Disconnect without being alarming. */
+.actions button.danger {
+  background: transparent;
+  border-color: var(--err);
+  color: var(--err);
+}
+.actions button.danger:hover {
+  background: rgba(230, 96, 96, 0.12);
+  filter: none;
+}
+.actions button:hover { filter: brightness(1.1); }
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #1a1d23;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+}
+
+.led {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--fg-dim);
+  box-shadow: 0 0 6px currentColor;
+}
+.led.ok   { background: var(--ok);   color: var(--ok);   }
+.led.warn { background: var(--warn); color: var(--warn); }
+.led.err  { background: var(--err);  color: var(--err);  }
+
+#statusText { font-size: 14px; }
+
+.footnote {
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  body { padding: 0; }
+  .card { border-radius: 0; max-width: 100%; min-height: 100vh; }
+}
