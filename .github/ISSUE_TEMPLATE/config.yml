@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / discussion
+    url: https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/discussions
+    about: For general questions, configuration help, or "is this a bug?" — start a discussion first.

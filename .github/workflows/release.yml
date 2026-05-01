@@ -29,6 +29,9 @@ jobs:
           - label: linux-arm64
             os: ubuntu-24.04-arm
             qt_arch: linux_gcc_arm64
+          - label: macos-arm64
+            os: macos-14
+            qt_arch: clang_64
     steps:
       - uses: actions/checkout@v4
 
@@ -96,6 +99,19 @@ jobs:
           cp README.md LICENSE INSTALL-LINUX.md INSTALL-RPI.md "$stage/"
           tar -C stage -czf \
             "spe-remote-qt-${{ steps.ver.outputs.version }}-${arch}.tar.gz" \
+            "$(basename "$stage")"
+
+      - name: Stage macOS package
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          stage="stage/spe-remote-qt-${{ steps.ver.outputs.version }}-macos-arm64"
+          mkdir -p "$stage"
+          cp build/spe-remote-qt "$stage/"
+          cp build/spe-remoted   "$stage/"
+          cp README.md LICENSE INSTALL-LINUX.md "$stage/"
+          tar -C stage -czf \
+            "spe-remote-qt-${{ steps.ver.outputs.version }}-macos-arm64.tar.gz" \
             "$(basename "$stage")"
 
       - name: Upload artifact
