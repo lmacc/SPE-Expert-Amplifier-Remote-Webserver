@@ -13,41 +13,70 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-linux:
     name: Build (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - label: windows-x64
-            os: windows-latest
-            qt_arch: win64_msvc2022_64
           - label: linux-x64
             os: ubuntu-24.04
-            qt_arch: linux_gcc_64
           - label: linux-arm64
             os: ubuntu-24.04-arm
-            qt_arch: linux_gcc_arm64
-          - label: macos-arm64
-            os: macos-14
-            qt_arch: clang_64
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux build deps
-        if: runner.os == 'Linux'
+      - name: Install Qt 6 + build deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build build-essential \
-            libgl1-mesa-dev libegl1-mesa-dev libfontconfig1-dev \
-            libxkbcommon-dev libdbus-1-dev
+          sudo apt-get install -y cmake ninja-build build-essential \
+            qt6-base-dev qt6-serialport-dev qt6-websockets-dev \
+            qt6-httpserver-dev libgl1-mesa-dev libegl1-mesa-dev
+
+      - name: Configure
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Resolve version
+        id: ver
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=${tag}"           >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}"     >> "$GITHUB_OUTPUT"
+
+      - name: Stage tarball
+        run: |
+          arch="${{ matrix.label }}"
+          stage="stage/spe-remote-qt-${{ steps.ver.outputs.version }}-${arch}"
+          mkdir -p "$stage"
+          cp build/spe-remote-qt "$stage/"
+          cp build/spe-remoted   "$stage/"
+          cp README.md LICENSE INSTALL-LINUX.md INSTALL-RPI.md "$stage/"
+          tar -C stage -czf \
+            "spe-remote-qt-${{ steps.ver.outputs.version }}-${arch}.tar.gz" \
+            "$(basename "$stage")"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spe-remote-qt-${{ steps.ver.outputs.version }}-${{ matrix.label }}
+          path: spe-remote-qt-*.tar.gz
+          if-no-files-found: error
+
+  build-windows:
+    name: Build (windows-x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Install Qt 6
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.3'
-          arch: ${{ matrix.qt_arch }}
+          version: '6.8.0'
+          arch: win64_msvc2022_64
           modules: 'qthttpserver qtwebsockets qtserialport'
           cache: true
 
@@ -63,16 +92,11 @@ jobs:
         id: ver
         shell: bash
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            tag="${{ github.event.inputs.tag }}"
-          else
-            tag="${GITHUB_REF_NAME}"
-          fi
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=${tag}"           >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}"     >> "$GITHUB_OUTPUT"
 
-      - name: Stage Windows package
-        if: runner.os == 'Windows'
+      - name: Stage zip
         shell: pwsh
         run: |
           $stage = "stage/spe-remote-qt-${{ steps.ver.outputs.version }}-windows-x64"
@@ -87,23 +111,44 @@ jobs:
           Compress-Archive -Path "$stage/*" `
             -DestinationPath "spe-remote-qt-${{ steps.ver.outputs.version }}-windows-x64.zip"
 
-      - name: Stage Linux package
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          arch="${{ matrix.label }}"   # linux-x64 or linux-arm64
-          stage="stage/spe-remote-qt-${{ steps.ver.outputs.version }}-${arch}"
-          mkdir -p "$stage"
-          cp build/spe-remote-qt "$stage/"
-          cp build/spe-remoted   "$stage/"
-          cp README.md LICENSE INSTALL-LINUX.md INSTALL-RPI.md "$stage/"
-          tar -C stage -czf \
-            "spe-remote-qt-${{ steps.ver.outputs.version }}-${arch}.tar.gz" \
-            "$(basename "$stage")"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spe-remote-qt-${{ steps.ver.outputs.version }}-windows-x64
+          path: spe-remote-qt-*.zip
+          if-no-files-found: error
 
-      - name: Stage macOS package
-        if: runner.os == 'macOS'
-        shell: bash
+  build-macos:
+    name: Build (macos-arm64)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.0'
+          arch: clang_64
+          modules: 'qthttpserver qtwebsockets qtserialport'
+          cache: true
+
+      - name: Install build tools
+        run: brew install ninja
+
+      - name: Configure
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Resolve version
+        id: ver
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=${tag}"           >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}"     >> "$GITHUB_OUTPUT"
+
+      - name: Stage tarball
         run: |
           stage="stage/spe-remote-qt-${{ steps.ver.outputs.version }}-macos-arm64"
           mkdir -p "$stage"
@@ -117,28 +162,21 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: spe-remote-qt-${{ steps.ver.outputs.version }}-${{ matrix.label }}
-          path: |
-            spe-remote-qt-*.zip
-            spe-remote-qt-*.tar.gz
+          name: spe-remote-qt-${{ steps.ver.outputs.version }}-macos-arm64
+          path: spe-remote-qt-*.tar.gz
           if-no-files-found: error
 
   release:
     name: Publish release
-    needs: build
+    needs: [build-linux, build-windows, build-macos]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Resolve tag
         id: ver
-        shell: bash
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            tag="${{ github.event.inputs.tag }}"
-          else
-            tag="${GITHUB_REF_NAME}"
-          fi
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
@@ -153,7 +191,6 @@ jobs:
       - name: Publish / update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
         run: |
           tag="${{ steps.ver.outputs.tag }}"
           if gh release view "$tag" >/dev/null 2>&1; then
