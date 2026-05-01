@@ -251,10 +251,9 @@ bool HttpServer::listen(quint16 port) {
         m_tcpServer = nullptr;
         return false;
     }
-    if (!m_server->bind(m_tcpServer)) {
-        emit logMessage(QStringLiteral("HTTP bind to QTcpServer failed"));
-        return false;
-    }
+    // Qt 6.5+ QAbstractHttpServer::bind returns void; the only failure mode is
+    // the QTcpServer::listen above.
+    m_server->bind(m_tcpServer);
     emit logMessage(QStringLiteral("HTTP listening on :%1").arg(m_tcpServer->serverPort()));
     return true;
 }
