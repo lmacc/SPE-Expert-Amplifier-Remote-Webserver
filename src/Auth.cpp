@@ -1,6 +1,7 @@
 #include "Auth.h"
 
 #include <QCryptographicHash>
+#include <QList>
 #include <QPasswordDigestor>
 #include <QRandomGenerator>
 

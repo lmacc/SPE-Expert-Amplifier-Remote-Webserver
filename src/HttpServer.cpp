@@ -10,6 +10,9 @@
 #include <QHttpServer>
 #include <QHttpServerRequest>
 #include <QHttpServerResponse>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+#  include <QHttpHeaders>
+#endif
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -47,12 +50,38 @@ bool isSafeRelativePath(const QString& path) {
     return true;
 }
 
+// Qt 6.7 changed QHttpServerRequest::headers() return type from
+// QList<std::pair<QByteArray, QByteArray>> to QHttpHeaders. Helper hides
+// the difference.
+QByteArray headerValue(const QHttpServerRequest& req, const char* name) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+    return req.headers().value(QAnyStringView(QLatin1String(name))).toByteArray();
+#else
+    const auto headers = req.headers();
+    for (const auto& kv : headers) {
+        if (kv.first.compare(name, Qt::CaseInsensitive) == 0) {
+            return kv.second;
+        }
+    }
+    return {};
+#endif
+}
+
 QHttpServerResponse unauthorized() {
+    // Qt 6.7 reworked the headers API: addHeader/setHeader were replaced
+    // by setHeaders(QHttpHeaders). Build the response the right way for
+    // whichever Qt this is.
     QHttpServerResponse rsp("text/plain",
-                            "401 Unauthorized\n",
+                            QByteArrayLiteral("401 Unauthorized\n"),
                             QHttpServerResponse::StatusCode::Unauthorized);
-    // addHeader exists across Qt 6.4-6.10. setHeaders/QHttpHeaders is 6.7+.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+    QHttpHeaders h;
+    h.append(QHttpHeaders::WellKnownHeader::WWWAuthenticate,
+             QByteArrayLiteral("Basic realm=\"SPE Remote\""));
+    rsp.setHeaders(std::move(h));
+#else
     rsp.addHeader("WWW-Authenticate", "Basic realm=\"SPE Remote\"");
+#endif
     return rsp;
 }
 }  // namespace
@@ -142,7 +171,7 @@ void HttpServer::setSslConfiguration(const QSslConfiguration& cfg) {
 
 bool HttpServer::authOk(const QHttpServerRequest& req) const {
     if (m_authUser.isEmpty()) { return true; }
-    return Auth::checkBasic(req.value("Authorization"),
+    return Auth::checkBasic(headerValue(req, "Authorization"),
                             m_authUser, m_authHash);
 }
 
