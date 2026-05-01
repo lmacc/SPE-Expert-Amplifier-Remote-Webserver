@@ -1,4 +1,5 @@
 #include "AmpController.h"
+#include "Auth.h"
 #include "ConfigStore.h"
 #include "HttpServer.h"
 #include "MainWindow.h"
@@ -6,6 +7,10 @@
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QFile>
+#include <QSslCertificate>
+#include <QSslConfiguration>
+#include <QSslKey>
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
@@ -77,6 +82,30 @@ int main(int argc, char* argv[]) {
     amp.setBaudRate(cfg.baudRate());
     amp.setPortName(cfg.portName());
     if (cli.isSet(webRootOpt)) { http.setFileSystemRoot(cli.value(webRootOpt)); }
+
+    // Mirror daemon_main's auth/TLS wiring so the desktop app's embedded
+    // HTTP/WS endpoints are protected the same way when exposed on the LAN.
+    if (cfg.tlsConfigured()) {
+        QSslConfiguration sslCfg;
+        QFile certFile(cfg.certFile());
+        QFile keyFile(cfg.keyFile());
+        if (certFile.open(QIODevice::ReadOnly) && keyFile.open(QIODevice::ReadOnly)) {
+            const QSslCertificate cert(&certFile, QSsl::Pem);
+            QSslKey key(&keyFile, QSsl::Rsa, QSsl::Pem);
+            if (key.isNull()) { keyFile.seek(0); key = QSslKey(&keyFile, QSsl::Ec, QSsl::Pem); }
+            if (!cert.isNull() && !key.isNull()) {
+                sslCfg.setLocalCertificate(cert);
+                sslCfg.setPrivateKey(key);
+                http.setSslConfiguration(sslCfg);
+                bridge.setSslConfiguration(sslCfg);
+            }
+        }
+    }
+    if (cfg.authEnabled()) {
+        http.enableAuth(cfg.authUser(), cfg.authPasswordHash());
+        bridge.enableAuth(cfg.authUser(), cfg.authPasswordHash());
+    }
+
     http.attachControls(&amp, &cfg);
 
     MainWindow w(&amp, &bridge, &http);

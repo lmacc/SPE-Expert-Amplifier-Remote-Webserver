@@ -32,6 +32,8 @@ add_library(spe_core STATIC
     src/HttpServer.cpp
     src/ConfigStore.h
     src/ConfigStore.cpp
+    src/Auth.h
+    src/Auth.cpp
 )
 target_include_directories(spe_core PUBLIC src)
 target_link_libraries(spe_core PUBLIC

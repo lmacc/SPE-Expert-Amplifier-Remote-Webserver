@@ -1,7 +1,9 @@
 #pragma once
 
+#include <QByteArray>
 #include <QList>
 #include <QObject>
+#include <QSslConfiguration>
 #include <QString>
 
 class QWebSocket;
@@ -14,9 +16,18 @@ public:
     explicit WsBridge(QObject* parent = nullptr);
     ~WsBridge() override;
 
+    // Require HTTP Basic auth on the WebSocket upgrade. Empty user disables.
+    // hash format matches Auth::hashPassword. Must be called before listen().
+    void enableAuth(const QString& user, const QByteArray& hash);
+
+    // Run as wss:// instead of ws://. Empty config disables. Must be called
+    // before listen() — secure mode is fixed at QWebSocketServer construction.
+    void setSslConfiguration(const QSslConfiguration& cfg);
+
     bool listen(quint16 port = 8888);
     void close();
     quint16 serverPort() const;
+    bool isSecure() const;
 
 public slots:
     void broadcastStatus(const AmpStatus& status);
@@ -36,7 +47,15 @@ private slots:
     void onClientDisconnected();
 
 private:
+    void ensureServer();
+
     QWebSocketServer* m_server = nullptr;
     QList<QWebSocket*> m_clients;
     QString m_lastJson;  // only resend when changed, matching server.py
+
+    QString m_authUser;
+    QByteArray m_authHash;
+
+    QSslConfiguration m_sslConfig;
+    bool m_sslEnabled = false;
 };

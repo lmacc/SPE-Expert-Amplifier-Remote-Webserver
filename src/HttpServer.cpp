@@ -1,6 +1,7 @@
 #include "HttpServer.h"
 
 #include "AmpController.h"
+#include "Auth.h"
 #include "ConfigStore.h"
 
 #include <QDir>
@@ -13,6 +14,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSerialPortInfo>
+#include <QSslServer>
 #include <QTcpServer>
 
 namespace {
@@ -44,6 +46,15 @@ bool isSafeRelativePath(const QString& path) {
     if (path.startsWith(QLatin1Char('/')))  { return false; }
     return true;
 }
+
+QHttpServerResponse unauthorized() {
+    QHttpServerResponse rsp("text/plain",
+                            "401 Unauthorized\n",
+                            QHttpServerResponse::StatusCode::Unauthorized);
+    // addHeader exists across Qt 6.4-6.10. setHeaders/QHttpHeaders is 6.7+.
+    rsp.addHeader("WWW-Authenticate", "Basic realm=\"SPE Remote\"");
+    return rsp;
+}
 }  // namespace
 
 HttpServer::HttpServer(QObject* parent)
@@ -59,14 +70,14 @@ HttpServer::HttpServer(QObject* parent)
 void HttpServer::registerStaticRoutes() {
     // Root path → index.html.
     m_server->route(QStringLiteral("/"),
-                    [this]() {
+                    [this](const QHttpServerRequest& req) {
+        if (!authOk(req)) { return unauthorized(); }
         QByteArray ctype;
         QByteArray body = loadAsset(QStringLiteral("index.html"), ctype);
         if (body.isNull()) {
             return QHttpServerResponse(QHttpServerResponse::StatusCode::NotFound);
         }
-        QHttpServerResponse rsp(ctype, body);
-        return rsp;
+        return QHttpServerResponse(ctype, body);
     });
 
     // QHttpServer's <arg> placeholder matches a single path segment, so we
@@ -86,15 +97,20 @@ void HttpServer::registerStaticRoutes() {
     };
 
     m_server->route(QStringLiteral("/<arg>"),
-                    [serve](const QString& a) {
+                    [this, serve](const QString& a, const QHttpServerRequest& req) {
+        if (!authOk(req)) { return unauthorized(); }
         return serve(a);
     });
     m_server->route(QStringLiteral("/<arg>/<arg>"),
-                    [serve](const QString& a, const QString& b) {
+                    [this, serve](const QString& a, const QString& b,
+                                  const QHttpServerRequest& req) {
+        if (!authOk(req)) { return unauthorized(); }
         return serve(a + QLatin1Char('/') + b);
     });
     m_server->route(QStringLiteral("/<arg>/<arg>/<arg>"),
-                    [serve](const QString& a, const QString& b, const QString& c) {
+                    [this, serve](const QString& a, const QString& b, const QString& c,
+                                  const QHttpServerRequest& req) {
+        if (!authOk(req)) { return unauthorized(); }
         return serve(a + QLatin1Char('/') + b + QLatin1Char('/') + c);
     });
 }
@@ -112,6 +128,26 @@ void HttpServer::attachControls(AmpController* amp, ConfigStore* cfg) {
     m_cfg = cfg;
     // Route registration is deferred to listen() so REST handlers are
     // guaranteed to be matched before the wildcard static ones.
+}
+
+void HttpServer::enableAuth(const QString& user, const QByteArray& hash) {
+    m_authUser = user;
+    m_authHash = hash;
+}
+
+void HttpServer::setSslConfiguration(const QSslConfiguration& cfg) {
+    m_sslConfig = cfg;
+    m_sslEnabled = !cfg.localCertificate().isNull();
+}
+
+bool HttpServer::authOk(const QHttpServerRequest& req) const {
+    if (m_authUser.isEmpty()) { return true; }
+    return Auth::checkBasic(req.value("Authorization"),
+                            m_authUser, m_authHash);
+}
+
+bool HttpServer::isSecure() const {
+    return m_sslEnabled;
 }
 
 namespace {
@@ -152,11 +188,25 @@ QHttpServerResponse jsonResponse(const QJsonArray& a) {
 }  // namespace
 
 void HttpServer::registerRestRoutes() {
+    // GET /api/health — unauthenticated, used by uptime monitors and the
+    // systemd ExecStartPost check. Reports daemon liveness only, no
+    // configuration secrets.
+    m_server->route(QStringLiteral("/api/health"), [this] {
+        QJsonObject o;
+        o.insert(QStringLiteral("ok"),        true);
+        o.insert(QStringLiteral("connected"), m_amp ? m_amp->isConnected() : false);
+        o.insert(QStringLiteral("secure"),    m_sslEnabled);
+        o.insert(QStringLiteral("auth"),      !m_authUser.isEmpty());
+        return jsonResponse(o);
+    });
+
     // GET /api/ports — list every serial device the OS sees, with enough
     // identifying info (description, VID/PID, manufacturer) for the user
     // to pick the right one. FTDI devices get likelySpe=true so the web
     // UI can star them.
-    m_server->route(QStringLiteral("/api/ports"), [] {
+    m_server->route(QStringLiteral("/api/ports"),
+                    [this](const QHttpServerRequest& req) {
+        if (!authOk(req)) { return unauthorized(); }
         QJsonArray arr;
         for (const QSerialPortInfo& info : QSerialPortInfo::availablePorts()) {
             arr.append(portInfoToJson(info));
@@ -168,13 +218,16 @@ void HttpServer::registerRestRoutes() {
     // drive the connection LED + error banner.
     m_server->route(QStringLiteral("/api/config"),
                     QHttpServerRequest::Method::Get,
-                    [this] {
+                    [this](const QHttpServerRequest& req) {
+        if (!authOk(req)) { return unauthorized(); }
         QJsonObject o;
         o.insert(QStringLiteral("port"),      m_cfg->portName());
         o.insert(QStringLiteral("baud"),      m_cfg->baudRate());
         o.insert(QStringLiteral("connected"), m_amp->isConnected());
         o.insert(QStringLiteral("stopped"),   m_amp->isStopped());
         o.insert(QStringLiteral("lastError"), m_amp->lastError());
+        o.insert(QStringLiteral("auth"),      m_cfg->authEnabled());
+        o.insert(QStringLiteral("secure"),    m_sslEnabled);
         return jsonResponse(o);
     });
 
@@ -185,6 +238,7 @@ void HttpServer::registerRestRoutes() {
     m_server->route(QStringLiteral("/api/config"),
                     QHttpServerRequest::Method::Post,
                     [this](const QHttpServerRequest& req) {
+        if (!authOk(req)) { return unauthorized(); }
         const QJsonDocument doc = QJsonDocument::fromJson(req.body());
         if (!doc.isObject()) {
             QJsonObject err;
@@ -213,7 +267,8 @@ void HttpServer::registerRestRoutes() {
 
     m_server->route(QStringLiteral("/api/connect"),
                     QHttpServerRequest::Method::Post,
-                    [this] {
+                    [this](const QHttpServerRequest& req) {
+        if (!authOk(req)) { return unauthorized(); }
         m_amp->start();
         QJsonObject o;
         o.insert(QStringLiteral("ok"), true);
@@ -222,7 +277,8 @@ void HttpServer::registerRestRoutes() {
 
     m_server->route(QStringLiteral("/api/disconnect"),
                     QHttpServerRequest::Method::Post,
-                    [this] {
+                    [this](const QHttpServerRequest& req) {
+        if (!authOk(req)) { return unauthorized(); }
         m_amp->stop();
         QJsonObject o;
         o.insert(QStringLiteral("ok"), true);
@@ -243,7 +299,16 @@ bool HttpServer::listen(quint16 port) {
     // Qt 6.8 made QHttpServer::listen(QHostAddress, port) the canonical entry
     // point; 6.4–6.7 only expose listen(tcpServer). Use the backwards-compat
     // path so the same code builds against Qt 6.4+.
-    m_tcpServer = new QTcpServer(this);
+    if (m_sslEnabled) {
+        // QSslServer (Qt 6.4+) is a QTcpServer subclass that completes
+        // the TLS handshake before exposing the connection. QHttpServer
+        // sees an already-listening QTcpServer and treats it the same.
+        auto* ssl = new QSslServer(this);
+        ssl->setSslConfiguration(m_sslConfig);
+        m_tcpServer = ssl;
+    } else {
+        m_tcpServer = new QTcpServer(this);
+    }
     if (!m_tcpServer->listen(QHostAddress::Any, port)) {
         emit logMessage(QStringLiteral("HTTP listen failed: %1")
                             .arg(m_tcpServer->errorString()));
@@ -254,7 +319,10 @@ bool HttpServer::listen(quint16 port) {
     // Qt 6.5+ QAbstractHttpServer::bind returns void; the only failure mode is
     // the QTcpServer::listen above.
     m_server->bind(m_tcpServer);
-    emit logMessage(QStringLiteral("HTTP listening on :%1").arg(m_tcpServer->serverPort()));
+    emit logMessage(QStringLiteral("%1 listening on :%2")
+                        .arg(m_sslEnabled ? QStringLiteral("HTTPS")
+                                          : QStringLiteral("HTTP"))
+                        .arg(m_tcpServer->serverPort()));
     return true;
 }
 

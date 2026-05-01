@@ -36,6 +36,28 @@ public:
     quint16 httpPort() const     { return m_httpPort; }
     void setHttpPort(quint16 p);
 
+    // HTTP Basic auth. Auth is enabled iff both authUser and
+    // authPasswordHash are non-empty. The hash is in the
+    // "pbkdf2-sha256$..." format produced by Auth::hashPassword.
+    QString    authUser() const            { return m_authUser; }
+    QByteArray authPasswordHash() const    { return m_authPasswordHash; }
+    void setAuthUser(const QString& u);
+    void setAuthPasswordHash(const QByteArray& h);
+    bool authEnabled() const {
+        return !m_authUser.isEmpty() && !m_authPasswordHash.isEmpty();
+    }
+
+    // TLS. Enabled iff both certFile and keyFile are non-empty AND
+    // readable at startup. Paths are resolved relative to the config
+    // directory if not absolute.
+    QString certFile() const               { return m_certFile; }
+    QString keyFile() const                { return m_keyFile; }
+    void setCertFile(const QString& p);
+    void setKeyFile(const QString& p);
+    bool tlsConfigured() const {
+        return !m_certFile.isEmpty() && !m_keyFile.isEmpty();
+    }
+
 signals:
     void changed();
 
@@ -45,4 +67,8 @@ private:
     qint32 m_baudRate = 115200;
     quint16 m_wsPort = 8888;
     quint16 m_httpPort = 8080;
+    QString m_authUser;
+    QByteArray m_authPasswordHash;
+    QString m_certFile;
+    QString m_keyFile;
 };

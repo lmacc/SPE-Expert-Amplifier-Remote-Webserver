@@ -10,6 +10,7 @@
 //       ↑ /, /css/app.css, /justgage/justgage.js ...
 
 #include "AmpController.h"
+#include "Auth.h"
 #include "ConfigStore.h"
 #include "HttpServer.h"
 #include "WsBridge.h"
@@ -17,7 +18,11 @@
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QFile>
 #include <QSerialPortInfo>
+#include <QSslCertificate>
+#include <QSslConfiguration>
+#include <QSslKey>
 #include <QTextStream>
 #include <QtGlobal>
 
@@ -41,6 +46,48 @@ void installQuitHandler() {
     auto handler = [](int) { QCoreApplication::quit(); };
     std::signal(SIGINT, handler);
     std::signal(SIGTERM, handler);
+}
+
+// Loads PEM cert and key from disk into a QSslConfiguration. Returns
+// default-constructed config (and emits an error to stderr) on failure;
+// callers can detect this via QSslConfiguration::localCertificate().isNull().
+QSslConfiguration loadSslConfig(const QString& certPath, const QString& keyPath) {
+    QSslConfiguration cfg;
+    QFile certFile(certPath);
+    if (!certFile.open(QIODevice::ReadOnly)) {
+        logLine(QStringLiteral("tls"),
+                QStringLiteral("cannot open cert: %1").arg(certPath));
+        return {};
+    }
+    const QSslCertificate cert(&certFile, QSsl::Pem);
+    if (cert.isNull()) {
+        logLine(QStringLiteral("tls"),
+                QStringLiteral("cert parse failed: %1").arg(certPath));
+        return {};
+    }
+
+    QFile keyFile(keyPath);
+    if (!keyFile.open(QIODevice::ReadOnly)) {
+        logLine(QStringLiteral("tls"),
+                QStringLiteral("cannot open key: %1").arg(keyPath));
+        return {};
+    }
+    const QSslKey key(&keyFile, QSsl::Rsa, QSsl::Pem);
+    if (key.isNull()) {
+        // Try EC if RSA failed — many self-signed certs use EC keys.
+        keyFile.seek(0);
+        const QSslKey ecKey(&keyFile, QSsl::Ec, QSsl::Pem);
+        if (ecKey.isNull()) {
+            logLine(QStringLiteral("tls"),
+                    QStringLiteral("key parse failed: %1").arg(keyPath));
+            return {};
+        }
+        cfg.setPrivateKey(ecKey);
+    } else {
+        cfg.setPrivateKey(key);
+    }
+    cfg.setLocalCertificate(cert);
+    return cfg;
 }
 }  // namespace
 
@@ -88,6 +135,34 @@ int main(int argc, char* argv[]) {
     QCommandLineOption listPortsOpt(
         QStringLiteral("list-ports"),
         QStringLiteral("Print available serial ports and exit."));
+    QCommandLineOption authUserOpt(
+        QStringLiteral("auth-user"),
+        QStringLiteral("Username for HTTP Basic auth on the web UI and "
+                       "WebSocket. Overrides config."),
+        QStringLiteral("name"));
+    QCommandLineOption authPwdOpt(
+        QStringLiteral("auth-password"),
+        QStringLiteral("Plain password for HTTP Basic auth — hashed in "
+                       "memory before use, never persisted. For long-term "
+                       "use, generate a hash with --hash-password and put "
+                       "it in config.json under auth_password_hash."),
+        QStringLiteral("password"));
+    QCommandLineOption hashPwdOpt(
+        QStringLiteral("hash-password"),
+        QStringLiteral("Read a password from stdin (or its argument), print "
+                       "the PBKDF2 hash to stdout, and exit. Paste the result "
+                       "into config.json as auth_password_hash."),
+        QStringLiteral("password"));
+    QCommandLineOption certOpt(
+        QStringLiteral("cert-file"),
+        QStringLiteral("PEM-encoded TLS certificate. If set together with "
+                       "--key-file, the daemon serves HTTPS+WSS instead of "
+                       "HTTP+WS."),
+        QStringLiteral("path"));
+    QCommandLineOption keyOpt(
+        QStringLiteral("key-file"),
+        QStringLiteral("PEM-encoded TLS private key (RSA or EC)."),
+        QStringLiteral("path"));
 
     cli.addOption(portOpt);
     cli.addOption(baudOpt);
@@ -95,7 +170,18 @@ int main(int argc, char* argv[]) {
     cli.addOption(httpOpt);
     cli.addOption(webRootOpt);
     cli.addOption(listPortsOpt);
+    cli.addOption(authUserOpt);
+    cli.addOption(authPwdOpt);
+    cli.addOption(hashPwdOpt);
+    cli.addOption(certOpt);
+    cli.addOption(keyOpt);
     cli.process(app);
+
+    if (cli.isSet(hashPwdOpt)) {
+        const QString plain = cli.value(hashPwdOpt);
+        QTextStream(stdout) << Auth::hashPassword(plain) << '\n';
+        return 0;
+    }
 
     if (cli.isSet(listPortsOpt)) {
         for (const QSerialPortInfo& info : QSerialPortInfo::availablePorts()) {
@@ -113,6 +199,12 @@ int main(int argc, char* argv[]) {
     if (cli.isSet(baudOpt)) { cfg.setBaudRate(cli.value(baudOpt).toInt()); }
     if (cli.isSet(wsOpt))   { cfg.setWsPort(static_cast<quint16>(cli.value(wsOpt).toUInt())); }
     if (cli.isSet(httpOpt)) { cfg.setHttpPort(static_cast<quint16>(cli.value(httpOpt).toUInt())); }
+    if (cli.isSet(authUserOpt)) { cfg.setAuthUser(cli.value(authUserOpt)); }
+    if (cli.isSet(authPwdOpt)) {
+        cfg.setAuthPasswordHash(Auth::hashPassword(cli.value(authPwdOpt)));
+    }
+    if (cli.isSet(certOpt)) { cfg.setCertFile(cli.value(certOpt)); }
+    if (cli.isSet(keyOpt))  { cfg.setKeyFile(cli.value(keyOpt));   }
 
     AmpController amp;
     WsBridge bridge;
@@ -147,6 +239,29 @@ int main(int argc, char* argv[]) {
         http.setFileSystemRoot(cli.value(webRootOpt));
     }
 
+    // TLS — picked up by both the HTTP server and the WS bridge if
+    // both files load successfully. If they don't, we fall back to plain
+    // HTTP/WS rather than refusing to start; the operator gets a stderr
+    // line explaining why.
+    if (cfg.tlsConfigured()) {
+        const QSslConfiguration sslCfg = loadSslConfig(cfg.certFile(),
+                                                       cfg.keyFile());
+        if (!sslCfg.localCertificate().isNull()) {
+            http.setSslConfiguration(sslCfg);
+            bridge.setSslConfiguration(sslCfg);
+        } else {
+            logLine(QStringLiteral("tls"),
+                    QStringLiteral("TLS configured but cert/key load failed; "
+                                   "starting in plain HTTP/WS mode"));
+        }
+    }
+
+    // HTTP Basic auth on both the web UI and the WS upgrade.
+    if (cfg.authEnabled()) {
+        http.enableAuth(cfg.authUser(), cfg.authPasswordHash());
+        bridge.enableAuth(cfg.authUser(), cfg.authPasswordHash());
+    }
+
     // Expose ports list + config to the web UI so a headless Pi can be
     // reconfigured from a phone browser without SSH.
     http.attachControls(&amp, &cfg);
@@ -160,10 +275,15 @@ int main(int argc, char* argv[]) {
 
     installQuitHandler();
     logLine(QStringLiteral("main"),
-            QStringLiteral("ready — serial=%1 ws=:%2 http=:%3 config=%4")
+            QStringLiteral("ready — serial=%1 %2=:%3 %4=:%5 auth=%6 config=%7")
                 .arg(cfg.portName().isEmpty()
                          ? QStringLiteral("(unset; configure via web UI)")
                          : cfg.portName())
-                .arg(wsPort).arg(httpPort).arg(cfg.filePath()));
+                .arg(bridge.isSecure() ? QStringLiteral("wss") : QStringLiteral("ws"))
+                .arg(wsPort)
+                .arg(http.isSecure() ? QStringLiteral("https") : QStringLiteral("http"))
+                .arg(httpPort)
+                .arg(cfg.authEnabled() ? QStringLiteral("on") : QStringLiteral("off"))
+                .arg(cfg.filePath()));
     return app.exec();
 }

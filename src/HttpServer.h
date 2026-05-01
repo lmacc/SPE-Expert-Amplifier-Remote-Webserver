@@ -1,11 +1,14 @@
 #pragma once
 
+#include <QByteArray>
 #include <QObject>
+#include <QSslConfiguration>
 #include <QString>
 
 class AmpController;
 class ConfigStore;
 class QHttpServer;
+class QHttpServerRequest;
 class QTcpServer;
 
 // Static-file HTTP server with an optional REST API.
@@ -37,9 +40,18 @@ public:
     // Both pointers must outlive this object.
     void attachControls(AmpController* amp, ConfigStore* cfg);
 
+    // Require HTTP Basic auth on every request. Empty user disables.
+    // hash is the stored password hash (Auth::hashPassword format).
+    void enableAuth(const QString& user, const QByteArray& hash);
+
+    // Run the listener with TLS. Empty config disables. Pass a default-
+    // constructed QSslConfiguration to clear.
+    void setSslConfiguration(const QSslConfiguration& cfg);
+
     bool listen(quint16 port = 8080);
     void close();
     quint16 serverPort() const;
+    bool isSecure() const;
 
 signals:
     void logMessage(const QString& message);
@@ -49,6 +61,11 @@ private:
     void registerRestRoutes();
     void registerStaticRoutes();
 
+    // Returns true if the request is allowed through. Returns false and
+    // populates `out` with a 401 response if auth is enabled and the
+    // request fails the check.
+    bool authOk(const QHttpServerRequest& req) const;
+
     QHttpServer* m_server = nullptr;
     QTcpServer* m_tcpServer = nullptr;
     QString m_fsRoot;          // empty → serve from Qt resources at :/web
@@ -56,4 +73,12 @@ private:
     AmpController* m_amp = nullptr;
     ConfigStore* m_cfg = nullptr;
     bool m_routesRegistered = false;
+
+    // Auth state. authEnabled is implicit on m_authUser non-empty.
+    QString m_authUser;
+    QByteArray m_authHash;
+
+    // TLS state. Active iff non-default-constructed.
+    QSslConfiguration m_sslConfig;
+    bool m_sslEnabled = false;
 };
