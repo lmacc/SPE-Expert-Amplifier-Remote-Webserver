@@ -104,6 +104,8 @@ int main(int argc, char* argv[]) {
     if (cfg.authEnabled()) {
         http.enableAuth(cfg.authUser(), cfg.authPasswordHash());
         bridge.enableAuth(cfg.authUser(), cfg.authPasswordHash());
+        http.setTrustLan(cfg.trustLan());
+        bridge.setTrustLan(cfg.trustLan());
     }
 
     http.attachControls(&amp, &cfg);

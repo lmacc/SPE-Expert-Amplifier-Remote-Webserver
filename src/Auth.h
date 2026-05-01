@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QHostAddress>
 #include <QString>
 
 // Password hashing + HTTP Basic-auth helpers for the daemon.
@@ -37,5 +38,12 @@ bool parseBasicHeader(const QByteArray& headerValue,
 bool checkBasic(const QByteArray& headerValue,
                 const QString& expectedUser,
                 const QByteArray& expectedHash);
+
+// True if `addr` is on a private / local network. Covers IPv4
+// loopback (127/8), IPv4 link-local (169.254/16), RFC1918
+// (10/8, 172.16/12, 192.168/16), IPv6 loopback (::1), IPv6 link-local
+// (fe80::/10), and IPv6 ULA (fc00::/7). Used to bypass HTTP auth for
+// peers on the same LAN, where the WAN firewall is the trust boundary.
+bool isLanAddress(const QHostAddress& addr);
 
 }  // namespace Auth

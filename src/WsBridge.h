@@ -20,6 +20,10 @@ public:
     // hash format matches Auth::hashPassword. Must be called before listen().
     void enableAuth(const QString& user, const QByteArray& hash);
 
+    // When true (default), peers on a private/loopback network skip the
+    // auth check on the upgrade handshake. No-op if auth isn't enabled.
+    void setTrustLan(bool trust);
+
     // Run as wss:// instead of ws://. Empty config disables. Must be called
     // before listen() — secure mode is fixed at QWebSocketServer construction.
     void setSslConfiguration(const QSslConfiguration& cfg);
@@ -55,6 +59,7 @@ private:
 
     QString m_authUser;
     QByteArray m_authHash;
+    bool m_trustLan = true;
 
     QSslConfiguration m_sslConfig;
     bool m_sslEnabled = false;

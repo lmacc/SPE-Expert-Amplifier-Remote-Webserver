@@ -26,6 +26,10 @@ void WsBridge::enableAuth(const QString& user, const QByteArray& hash) {
     m_authHash = hash;
 }
 
+void WsBridge::setTrustLan(bool trust) {
+    m_trustLan = trust;
+}
+
 void WsBridge::setSslConfiguration(const QSslConfiguration& cfg) {
     m_sslConfig = cfg;
     m_sslEnabled = !cfg.localCertificate().isNull();
@@ -87,7 +91,11 @@ void WsBridge::onNewConnection() {
         // credentials via ws://user:pass@host:port/ — they're sent as
         // Authorization: Basic during the upgrade. Other clients use the
         // same header directly.
-        if (!m_authUser.isEmpty()) {
+        //
+        // LAN bypass: peers on a private/loopback network skip the auth
+        // check, matching the HTTP server's policy.
+        if (!m_authUser.isEmpty() &&
+            !(m_trustLan && Auth::isLanAddress(sock->peerAddress()))) {
             const QByteArray hdr = sock->request().rawHeader("Authorization");
             if (!Auth::checkBasic(hdr, m_authUser, m_authHash)) {
                 emit logMessage(QStringLiteral(

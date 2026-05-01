@@ -14,6 +14,11 @@ this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with 120k iterations and a 16-byte random salt; the iteration
   count is stored in the hash so cost can be raised later without
   invalidating existing config.
+- **LAN trust** — when auth is enabled, peers on a private network
+  (RFC1918, loopback, link-local, IPv6 ULA) skip the password
+  prompt by default. Disable with `trust_lan: false` in
+  `config.json` or `--no-lan-trust` on the CLI. `/api/health` and
+  `/api/config` report the live `trustLan` state.
 - **`--hash-password`** CLI flag on `spe-remoted` — generates a
   hash for pasting into `config.json`, never persists plaintext.
 - **Optional TLS** on both HTTP (now HTTPS) and WebSocket (now WSS).

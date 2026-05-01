@@ -40,6 +40,9 @@ void ConfigStore::load() {
         m_authPasswordHash = o.value(QLatin1String("auth_password_hash"))
                                  .toString().toUtf8();
     }
+    if (o.contains(QLatin1String("trust_lan"))) {
+        m_trustLan = o.value(QLatin1String("trust_lan")).toBool(m_trustLan);
+    }
     if (o.contains(QLatin1String("cert_file"))) {
         m_certFile = o.value(QLatin1String("cert_file")).toString();
     }
@@ -59,6 +62,7 @@ bool ConfigStore::save() const {
     o.insert(QLatin1String("http_port"),          static_cast<int>(m_httpPort));
     o.insert(QLatin1String("auth_user"),          m_authUser);
     o.insert(QLatin1String("auth_password_hash"), QString::fromUtf8(m_authPasswordHash));
+    o.insert(QLatin1String("trust_lan"),          m_trustLan);
     o.insert(QLatin1String("cert_file"),          m_certFile);
     o.insert(QLatin1String("key_file"),           m_keyFile);
 
@@ -101,6 +105,12 @@ void ConfigStore::setAuthUser(const QString& u) {
 void ConfigStore::setAuthPasswordHash(const QByteArray& h) {
     if (m_authPasswordHash == h) { return; }
     m_authPasswordHash = h;
+    emit changed();
+}
+
+void ConfigStore::setTrustLan(bool t) {
+    if (m_trustLan == t) { return; }
+    m_trustLan = t;
     emit changed();
 }
 

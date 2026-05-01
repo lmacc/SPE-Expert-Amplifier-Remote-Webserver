@@ -164,6 +164,10 @@ void HttpServer::enableAuth(const QString& user, const QByteArray& hash) {
     m_authHash = hash;
 }
 
+void HttpServer::setTrustLan(bool trust) {
+    m_trustLan = trust;
+}
+
 void HttpServer::setSslConfiguration(const QSslConfiguration& cfg) {
     m_sslConfig = cfg;
     m_sslEnabled = !cfg.localCertificate().isNull();
@@ -171,6 +175,11 @@ void HttpServer::setSslConfiguration(const QSslConfiguration& cfg) {
 
 bool HttpServer::authOk(const QHttpServerRequest& req) const {
     if (m_authUser.isEmpty()) { return true; }
+    // LAN bypass: same-network peers skip the password prompt. The
+    // operator at home, on the same Wi-Fi, doesn't have to type anything.
+    // Anyone reaching the daemon from outside the LAN — port forward,
+    // tunnel, public VPN — still gets the 401.
+    if (m_trustLan && Auth::isLanAddress(req.remoteAddress())) { return true; }
     return Auth::checkBasic(headerValue(req, "Authorization"),
                             m_authUser, m_authHash);
 }
@@ -226,6 +235,7 @@ void HttpServer::registerRestRoutes() {
         o.insert(QStringLiteral("connected"), m_amp ? m_amp->isConnected() : false);
         o.insert(QStringLiteral("secure"),    m_sslEnabled);
         o.insert(QStringLiteral("auth"),      !m_authUser.isEmpty());
+        o.insert(QStringLiteral("trustLan"),  m_trustLan);
         return jsonResponse(o);
     });
 
@@ -256,6 +266,7 @@ void HttpServer::registerRestRoutes() {
         o.insert(QStringLiteral("stopped"),   m_amp->isStopped());
         o.insert(QStringLiteral("lastError"), m_amp->lastError());
         o.insert(QStringLiteral("auth"),      m_cfg->authEnabled());
+        o.insert(QStringLiteral("trustLan"),  m_trustLan);
         o.insert(QStringLiteral("secure"),    m_sslEnabled);
         return jsonResponse(o);
     });

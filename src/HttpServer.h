@@ -44,6 +44,11 @@ public:
     // hash is the stored password hash (Auth::hashPassword format).
     void enableAuth(const QString& user, const QByteArray& hash);
 
+    // When true (default), peers on a private/loopback network skip the
+    // auth check. False means auth is required from every IP. No-op if
+    // auth isn't enabled.
+    void setTrustLan(bool trust);
+
     // Run the listener with TLS. Empty config disables. Pass a default-
     // constructed QSslConfiguration to clear.
     void setSslConfiguration(const QSslConfiguration& cfg);
@@ -77,6 +82,7 @@ private:
     // Auth state. authEnabled is implicit on m_authUser non-empty.
     QString m_authUser;
     QByteArray m_authHash;
+    bool m_trustLan = true;
 
     // TLS state. Active iff non-default-constructed.
     QSslConfiguration m_sslConfig;

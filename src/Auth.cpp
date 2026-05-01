@@ -99,6 +99,33 @@ bool parseBasicHeader(const QByteArray& headerValue,
     return true;
 }
 
+bool isLanAddress(const QHostAddress& addr) {
+    // Convert IPv4-in-IPv6 (::ffff:192.168.x.y) down to the IPv4 form so
+    // the IPv4 subnet checks below work uniformly. Also handles IPv4
+    // dual-stack listeners reporting the IPv6 representation.
+    bool v4Ok = false;
+    const quint32 v4 = addr.toIPv4Address(&v4Ok);
+
+    if (addr.isLoopback()) { return true; }
+
+    // IPv4 link-local 169.254.0.0/16
+    if (v4Ok) {
+        const QHostAddress a(v4);
+        if (a.isInSubnet(QHostAddress(QStringLiteral("169.254.0.0")), 16)) { return true; }
+        // RFC1918
+        if (a.isInSubnet(QHostAddress(QStringLiteral("10.0.0.0")),    8))  { return true; }
+        if (a.isInSubnet(QHostAddress(QStringLiteral("172.16.0.0")), 12))  { return true; }
+        if (a.isInSubnet(QHostAddress(QStringLiteral("192.168.0.0")),16))  { return true; }
+        return false;
+    }
+
+    // IPv6 link-local fe80::/10
+    if (addr.isInSubnet(QHostAddress(QStringLiteral("fe80::")), 10)) { return true; }
+    // IPv6 ULA fc00::/7
+    if (addr.isInSubnet(QHostAddress(QStringLiteral("fc00::")), 7))  { return true; }
+    return false;
+}
+
 bool checkBasic(const QByteArray& headerValue,
                 const QString& expectedUser,
                 const QByteArray& expectedHash) {

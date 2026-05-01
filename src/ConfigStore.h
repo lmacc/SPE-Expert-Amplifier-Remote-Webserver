@@ -47,6 +47,13 @@ public:
         return !m_authUser.isEmpty() && !m_authPasswordHash.isEmpty();
     }
 
+    // When true (default), peers on a private/loopback network bypass
+    // auth — the LAN is treated as the trust boundary. WAN clients
+    // (anyone reaching the daemon through a port forward, tunnel, or
+    // VPN-with-public-routing) still get the 401 prompt.
+    bool trustLan() const                  { return m_trustLan; }
+    void setTrustLan(bool t);
+
     // TLS. Enabled iff both certFile and keyFile are non-empty AND
     // readable at startup. Paths are resolved relative to the config
     // directory if not absolute.
@@ -69,6 +76,7 @@ private:
     quint16 m_httpPort = 8080;
     QString m_authUser;
     QByteArray m_authPasswordHash;
+    bool m_trustLan = true;
     QString m_certFile;
     QString m_keyFile;
 };

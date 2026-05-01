@@ -163,6 +163,12 @@ int main(int argc, char* argv[]) {
         QStringLiteral("key-file"),
         QStringLiteral("PEM-encoded TLS private key (RSA or EC)."),
         QStringLiteral("path"));
+    QCommandLineOption noLanTrustOpt(
+        QStringLiteral("no-lan-trust"),
+        QStringLiteral("Require auth from LAN peers too. Default is to "
+                       "skip the password prompt for clients on a private "
+                       "(RFC1918 / loopback / link-local / IPv6 ULA) "
+                       "network."));
 
     cli.addOption(portOpt);
     cli.addOption(baudOpt);
@@ -175,6 +181,7 @@ int main(int argc, char* argv[]) {
     cli.addOption(hashPwdOpt);
     cli.addOption(certOpt);
     cli.addOption(keyOpt);
+    cli.addOption(noLanTrustOpt);
     cli.process(app);
 
     if (cli.isSet(hashPwdOpt)) {
@@ -205,6 +212,7 @@ int main(int argc, char* argv[]) {
     }
     if (cli.isSet(certOpt)) { cfg.setCertFile(cli.value(certOpt)); }
     if (cli.isSet(keyOpt))  { cfg.setKeyFile(cli.value(keyOpt));   }
+    if (cli.isSet(noLanTrustOpt)) { cfg.setTrustLan(false); }
 
     AmpController amp;
     WsBridge bridge;
@@ -260,6 +268,8 @@ int main(int argc, char* argv[]) {
     if (cfg.authEnabled()) {
         http.enableAuth(cfg.authUser(), cfg.authPasswordHash());
         bridge.enableAuth(cfg.authUser(), cfg.authPasswordHash());
+        http.setTrustLan(cfg.trustLan());
+        bridge.setTrustLan(cfg.trustLan());
     }
 
     // Expose ports list + config to the web UI so a headless Pi can be
@@ -274,6 +284,11 @@ int main(int argc, char* argv[]) {
     if (httpPort != 0 && !http.listen(httpPort)) { return 1; }
 
     installQuitHandler();
+    QString authState = QStringLiteral("off");
+    if (cfg.authEnabled()) {
+        authState = cfg.trustLan() ? QStringLiteral("on (LAN trusted)")
+                                   : QStringLiteral("on (everyone)");
+    }
     logLine(QStringLiteral("main"),
             QStringLiteral("ready — serial=%1 %2=:%3 %4=:%5 auth=%6 config=%7")
                 .arg(cfg.portName().isEmpty()
@@ -283,7 +298,7 @@ int main(int argc, char* argv[]) {
                 .arg(wsPort)
                 .arg(http.isSecure() ? QStringLiteral("https") : QStringLiteral("http"))
                 .arg(httpPort)
-                .arg(cfg.authEnabled() ? QStringLiteral("on") : QStringLiteral("off"))
+                .arg(authState)
                 .arg(cfg.filePath()));
     return app.exec();
 }

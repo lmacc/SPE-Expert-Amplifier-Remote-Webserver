@@ -185,8 +185,27 @@ apply.
 ## Securing the daemon
 
 The HTTP server and WebSocket bridge support **HTTP Basic auth** and
-**optional TLS**. They're off by default — fine for a LAN behind a
+**optional TLS**. Both are off by default — fine for a LAN behind a
 home router. Turn them on before exposing the daemon to anything else.
+
+### LAN trust (on by default)
+
+When a password **is** set, peers on a private network (RFC1918
+ranges `10/8`, `172.16/12`, `192.168/16`, plus loopback, IPv4
+link-local `169.254/16`, IPv6 link-local `fe80::/10`, and IPv6 ULA
+`fc00::/7`) skip the password prompt automatically. The operator at
+home, on the same Wi-Fi as the Pi, never has to type anything; only
+clients reaching the daemon from outside the LAN — port forward,
+public tunnel, VPN with public routing — get the 401 prompt.
+
+Disable this if you want every request authenticated (e.g. on a
+guest VLAN that's technically RFC1918 but you don't trust):
+
+```json
+{ "trust_lan": false }
+```
+
+…or pass `--no-lan-trust` on the daemon CLI.
 
 ### Step 1 — Add a password
 
@@ -206,11 +225,12 @@ Drop the line into `config.json`:
 }
 ```
 
-`systemctl restart spe-remoted` and every request now needs Basic
-auth. The web UI: open `http://operator:your-password-here@pi.local:8080/`
-the first time — browsers don't propagate the `Authorization` header
-to the WebSocket upgrade unless you give them the credentials in the
-URL.
+`systemctl restart spe-remoted` and every **non-LAN** request now
+needs Basic auth. From the same network as the Pi, browsers reach
+the UI without a prompt; from outside, browsers will pop up the
+Basic auth dialog. Programmatic / cross-network clients can pass
+credentials in the URL (`http://operator:pw@pi.example.com:8080/`)
+or set the `Authorization: Basic` header directly.
 
 ### Step 2 — Add TLS
 
@@ -246,7 +266,7 @@ issued PEMs.
 
 ```bash
 curl https://operator:pw@pi.local:8080/api/health
-# {"ok":true,"connected":true,"secure":true,"auth":true}
+# {"ok":true,"connected":true,"secure":true,"auth":true,"trustLan":true}
 ```
 
 `/api/health` is intentionally unauthenticated so uptime checks
