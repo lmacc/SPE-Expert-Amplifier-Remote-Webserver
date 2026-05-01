@@ -4,7 +4,25 @@
 [![Release](https://img.shields.io/github/v/release/lmacc/SPE-Expert-Amplifier-Remote-Webserver)](https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Native **Qt6 / C++20** port of the WebSocket amplifier-bridge. 
+Native **Qt6 / C++20** port of the WebSocket amplifier-bridge.
+
+## Screenshots
+
+**Qt desktop app** — the synthetic chassis with the native front panel
+(Windows 11 shown):
+
+![Qt desktop app](docs/qt%20desktop%20app.png)
+
+**Browser UI** — same chassis, same controls, served by the daemon at
+`http://<host>:8080/`. Reaches any phone, tablet, or PC on the LAN:
+
+![Web UI](docs/Web%20UI.png)
+
+**Connection settings** — pick the serial port, baud, and listen ports
+from the desktop app or the in-browser settings page:
+
+![Connection settings](docs/Connection%20setting%20dialog.png)
+
 
 The wire format (WebSocket JSON field names, serial command frames) is kept
 **byte-identical** original, so any ESP configured device can connect to the webserver.
