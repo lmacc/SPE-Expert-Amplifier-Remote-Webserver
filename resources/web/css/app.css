@@ -30,12 +30,21 @@
 }
 
 .amp-brand {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: #9aa0ac;
   margin-bottom: 10px;
-  text-align: left;
+}
+.amp-credit {
+  /* Inherits everything from .amp-brand — same font family (the body
+     stack), same size, same uppercase + letter-spacing — so it reads
+     as part of the brand strip, just right-aligned. */
+  color: #6a6f78;        /* a touch dimmer than the model name */
 }
 
 /* The main row: left cluster | LCD | right cluster */

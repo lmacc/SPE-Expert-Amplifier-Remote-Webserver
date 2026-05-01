@@ -403,6 +403,16 @@ QLabel#brandLabel {
     letter-spacing: 2px;
     qproperty-alignment: 'AlignLeft';
 }
+QLabel#brandCredit {
+    /* Same font, size, and letter-spacing as #brandLabel — the QSS font
+     * stack is inherited from AmpFaceWidget so both labels render in
+     * the same family. Slightly dimmer colour matches the bottom-strip
+     * brandText so the credit reads as a quiet attribution. */
+    color: #6a6f78;
+    font-size: 11px;
+    letter-spacing: 2px;
+    qproperty-alignment: 'AlignRight';
+}
 QLabel#connLabel {
     color: #9aa0ac;
     font-size: 11px;
@@ -538,9 +548,24 @@ void AmpFaceWidget::buildUi() {
     outer->setSpacing(8);
 
     // Brand strip ----------------------------------------------------------
+    // Brand on the left, "Created by EI5GJB" on the right. Both labels
+    // share the chassis font (inherited) so they sit consistently on the
+    // top edge of the panel.
+    auto* brandRow = new QHBoxLayout;
+    brandRow->setContentsMargins(0, 0, 0, 0);
+    brandRow->setSpacing(8);
+
     auto* brand = new QLabel(QStringLiteral("SPE EXPERT 1.3K-FA · REMOTE"));
     brand->setObjectName(QStringLiteral("brandLabel"));
-    outer->addWidget(brand);
+    brandRow->addWidget(brand);
+
+    brandRow->addStretch(1);
+
+    auto* credit = new QLabel(QStringLiteral("CREATED BY EI5GJB"));
+    credit->setObjectName(QStringLiteral("brandCredit"));
+    brandRow->addWidget(credit);
+
+    outer->addLayout(brandRow);
 
     // Main panel: left cluster | LCD | right cluster ----------------------
     auto* panel = new QHBoxLayout;
