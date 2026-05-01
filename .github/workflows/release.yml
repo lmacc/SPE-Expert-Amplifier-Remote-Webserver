@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to (re)build, e.g. v1.3.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: windows-x64
+            os: windows-latest
+            qt_arch: win64_msvc2022_64
+          - label: linux-x64
+            os: ubuntu-24.04
+            qt_arch: linux_gcc_64
+          - label: linux-arm64
+            os: ubuntu-24.04-arm
+            qt_arch: linux_gcc_arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build build-essential \
+            libgl1-mesa-dev libegl1-mesa-dev libfontconfig1-dev \
+            libxkbcommon-dev libdbus-1-dev
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          arch: ${{ matrix.qt_arch }}
+          modules: 'qthttpserver qtwebsockets qtserialport'
+          cache: true
+
+      - name: Configure
+        shell: bash
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: bash
+        run: cmake --build build -j
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            tag="${{ github.event.inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Stage Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stage = "stage/spe-remote-qt-${{ steps.ver.outputs.version }}-windows-x64"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item build/spe-remote-qt.exe $stage/
+          Copy-Item build/spe-remoted.exe   $stage/
+          windeployqt --release --no-translations --no-system-d3d-compiler `
+            --no-opengl-sw $stage/spe-remote-qt.exe
+          Copy-Item README.md          $stage/
+          Copy-Item LICENSE            $stage/
+          Copy-Item INSTALL-WINDOWS.md $stage/
+          Compress-Archive -Path "$stage/*" `
+            -DestinationPath "spe-remote-qt-${{ steps.ver.outputs.version }}-windows-x64.zip"
+
+      - name: Stage Linux package
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          arch="${{ matrix.label }}"   # linux-x64 or linux-arm64
+          stage="stage/spe-remote-qt-${{ steps.ver.outputs.version }}-${arch}"
+          mkdir -p "$stage"
+          cp build/spe-remote-qt "$stage/"
+          cp build/spe-remoted   "$stage/"
+          cp README.md LICENSE INSTALL-LINUX.md INSTALL-RPI.md "$stage/"
+          tar -C stage -czf \
+            "spe-remote-qt-${{ steps.ver.outputs.version }}-${arch}.tar.gz" \
+            "$(basename "$stage")"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spe-remote-qt-${{ steps.ver.outputs.version }}-${{ matrix.label }}
+          path: |
+            spe-remote-qt-*.zip
+            spe-remote-qt-*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: ver
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            tag="${{ github.event.inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - name: Publish / update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          tag="${{ steps.ver.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" artifacts/spe-remote-qt-*.zip artifacts/spe-remote-qt-*.tar.gz --clobber
+          else
+            gh release create "$tag" \
+              --title "$tag — SPE Expert Amplifier Remote Webserver" \
+              --generate-notes \
+              artifacts/spe-remote-qt-*.zip artifacts/spe-remote-qt-*.tar.gz
+          fi

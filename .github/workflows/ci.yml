@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: windows-x64
+            os: windows-latest
+            qt_arch: win64_msvc2022_64
+          - label: linux-x64
+            os: ubuntu-24.04
+            qt_arch: linux_gcc_64
+          - label: linux-arm64
+            os: ubuntu-24.04-arm
+            qt_arch: linux_gcc_arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build build-essential \
+            libgl1-mesa-dev libegl1-mesa-dev libfontconfig1-dev \
+            libxkbcommon-dev libdbus-1-dev
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          arch: ${{ matrix.qt_arch }}
+          modules: 'qthttpserver qtwebsockets qtserialport'
+          cache: true
+
+      - name: Configure
+        shell: bash
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: bash
+        run: cmake --build build -j

@@ -1,5 +1,9 @@
 # SPE 1.3K-2K-FA Remote — Qt6 port
 
+[![CI](https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/actions/workflows/ci.yml/badge.svg)](https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/lmacc/SPE-Expert-Amplifier-Remote-Webserver)](https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Native **Qt6 / C++20** port of the WebSocket amplifier-bridge. 
 
 The wire format (WebSocket JSON field names, serial command frames) is kept
@@ -45,6 +49,8 @@ errors) end-to-end:
   pre-built zip from
   [the latest release](https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/releases/latest)
   and unzip. To upgrade, unzip the new release over the old folder.
+
+Per-release changes are tracked in [`CHANGELOG.md`](CHANGELOG.md).
 
 The sections below are the terse reference for people who already know
 their way around CMake.
