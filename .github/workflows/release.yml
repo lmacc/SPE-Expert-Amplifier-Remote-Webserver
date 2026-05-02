@@ -132,8 +132,13 @@ jobs:
         include:
           - label: macos-arm64
             os: macos-14          # Apple Silicon runner
-          - label: macos-x64
-            os: macos-13          # Intel runner
+          # macos-x64 (Intel, runner: macos-13) is added on demand.
+          # GitHub deprecated macos-13 in late 2025 and the runner pool
+          # is heavily contended. Re-add this entry and force-update the
+          # release tag (or workflow_dispatch with tag=vX.Y.Z) to upload
+          # the Intel tarball into the existing release.
+          # - label: macos-x64
+          #   os: macos-13
     steps:
       - uses: actions/checkout@v4
 

@@ -15,7 +15,7 @@ Grab the right tarball for your Mac from
 | Mac | File |
 |---|---|
 | Apple Silicon (M1/M2/M3/M4) | `spe-remote-qt-<version>-macos-arm64.tar.gz` |
-| Intel | `spe-remote-qt-<version>-macos-x64.tar.gz` |
+| Intel | `spe-remote-qt-<version>-macos-x64.tar.gz` (uploaded post-release once a build runner becomes available — see [§Building from source](#building-from-source) if it's not on the release yet) |
 
 Not sure? Click the Apple menu → **About This Mac** — the **Chip**
 line says either *Apple M1/M2/...* or *Intel Core i7/i9/...*.
