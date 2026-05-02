@@ -62,7 +62,7 @@ sudo pacman -S --needed cmake ninja base-devel \
 ```bash
 git clone https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver.git
 cd SPE-Expert-Amplifier-Remote-Webserver/qt6-port
-git checkout v1.3.0       # or stay on main for the latest
+git checkout v1.4.0       # or stay on main for the latest
 ```
 
 ## 3. Build
@@ -186,12 +186,12 @@ section for the recipe.
 
 The current release tag is shown on
 [the Releases page](https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/releases/latest);
-substitute it for `v1.3.0` below.
+substitute it for `v1.4.0` below.
 
 ```bash
 cd ~/SPE-Expert-Amplifier-Remote-Webserver/qt6-port    # wherever you cloned it
 git fetch --tags
-git checkout v1.3.0                    # or whatever the new tag is
+git checkout v1.4.0                    # or whatever the new tag is
 cmake --build build -j                 # incremental rebuild
 ```
 

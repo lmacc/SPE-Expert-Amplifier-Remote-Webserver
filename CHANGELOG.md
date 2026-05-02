@@ -6,6 +6,8 @@ this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-05-02
+
 ### Added
 - **HTTP Basic auth** on every web UI and REST endpoint, and on the
   WebSocket upgrade. Off by default; enable by setting `auth_user`
@@ -26,23 +28,46 @@ this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Falls back to plain HTTP/WS with a stderr line if cert/key load
   fails rather than refusing to start.
 - **`/api/health`** endpoint — unauthenticated so monitoring tools
-  keep working: returns `{ok, connected, secure, auth}`.
-- **`/api/config`** now also reports `{auth, secure}` so the web UI
-  can surface the security state.
-- GitHub Actions CI: every push to `main` builds Windows x64, Linux
-  x64, and Linux ARM64 (Pi) so regressions are caught before tagging.
-- GitHub Actions release workflow: pushing a `v*` tag builds binaries
-  on all three platforms (plus macOS arm64) and attaches them to the
-  GitHub Release.
+  keep working: returns `{ok, connected, secure, auth, trustLan}`.
+- **`/api/config`** now also reports `{auth, secure, trustLan}` so
+  the web UI can surface the security state.
+- **"Created by EI5GJB"** credit in the top-right of both the Qt
+  desktop chassis and the browser UI, sharing the brand strip's
+  font.
+- **macOS Intel binaries** in the release matrix — `macos-13`
+  (Intel) joins `macos-14` (Apple Silicon), so every release tag
+  produces five tarballs covering Windows x64, Linux x64, Linux
+  ARM64, macOS arm64, and macOS x64.
+- **GitHub Actions CI**: every push to `main` builds Windows x64,
+  Linux x64, and Linux ARM64 so regressions are caught before
+  tagging.
+- **GitHub Actions release workflow**: pushing a `v*` tag builds
+  binaries on all five platforms and attaches them to the GitHub
+  Release automatically.
+- **Screenshots** on the README landing page (Qt desktop app,
+  browser UI, Connection settings dialog).
 - `INSTALL-WINDOWS.md` — download / unzip / run walkthrough,
   SmartScreen and FTDI driver notes, build-from-source appendix.
-- `CHANGELOG.md` — this file.
+- `INSTALL-MACOS.md` — covers Apple Silicon and Intel paths,
+  Gatekeeper workaround, Homebrew build-from-source recipe.
+- `CHANGELOG.md`, `CONTRIBUTING.md`, issue templates, PR template,
+  README badges.
 
 ### Fixed
 - `HttpServer::listen()` — `QAbstractHttpServer::bind()` returns
   `void` in Qt 6.5+, not `bool`. The `QTcpServer::listen()` check
   earlier in the function already handles the only real failure
   path; this was a latent build error against modern Qt.
+- Cross-Qt-version compat on `QHttpServerResponse` headers and
+  `QHttpServerRequest::headers()` so the same source builds against
+  Qt 6.4 (Ubuntu apt) and Qt 6.7+ (Windows / macOS / fresh Linux).
+
+### Documented
+- New "Securing the daemon" section in the README — hash-password
+  recipe, openssl self-signed cert recipe, deployment-scenario
+  table mapping environments to auth/TLS combinations.
+- Windows port-8080 / Hyper-V WinNAT collision in `INSTALL-WINDOWS.md`
+  with the Connection-Settings escape hatch.
 
 ### Notes
 - Browsers do not propagate the `Authorization` header onto
@@ -123,7 +148,8 @@ First public release.
   (`packaging/install-pi.sh`).
 - Pre-built Windows x64 zip with all Qt 6 runtime DLLs bundled.
 
-[Unreleased]: https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/releases/tag/v1.4.0
 [1.3.0]: https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/releases/tag/v1.3.0
 [1.2.1]: https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/releases/tag/v1.2.1
 [1.2.0]: https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/releases/tag/v1.2.0

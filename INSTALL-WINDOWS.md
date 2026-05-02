@@ -18,7 +18,7 @@ spe-remote-qt-<version>-windows-x64.zip
 ## 2. Unzip anywhere
 
 Right-click → **Extract All…**, or use any zip tool. A folder like
-`spe-remote-qt-1.3.0-windows-x64\` is created with everything inside —
+`spe-remote-qt-1.4.0-windows-x64\` is created with everything inside —
 two `.exe`s, the Qt DLLs, and the platform plugins.
 
 You can put it on the Desktop, in `C:\Program Files\` (with admin

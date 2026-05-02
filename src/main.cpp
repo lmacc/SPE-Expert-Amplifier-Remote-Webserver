@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("spe-remote-qt"));
     QCoreApplication::setOrganizationName(QStringLiteral("spe-remote"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("1.3.0"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.4.0"));
 
     QCommandLineParser cli;
     cli.setApplicationDescription(QStringLiteral(

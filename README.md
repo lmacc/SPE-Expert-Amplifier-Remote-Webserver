@@ -59,14 +59,14 @@ If you're getting set up for the first time, the friendly walkthroughs
 below cover everything (apt deps, group membership, systemd, common
 errors) end-to-end:
 
+- **Windows** → [`INSTALL-WINDOWS.md`](INSTALL-WINDOWS.md) — pre-built
+  zip, all Qt 6 DLLs bundled.
+- **macOS** (Apple Silicon and Intel) → [`INSTALL-MACOS.md`](INSTALL-MACOS.md)
+  — pre-built tarball, plus the Homebrew build-from-source recipe.
 - **Linux desktop / server** → [`INSTALL-LINUX.md`](INSTALL-LINUX.md)
   ([upgrading from an older version](INSTALL-LINUX.md#updating-to-a-newer-release))
 - **Raspberry Pi (headless)** → [`INSTALL-RPI.md`](INSTALL-RPI.md)
   ([upgrading from an older version](INSTALL-RPI.md#updating-to-a-newer-release))
-- **Windows** → [`INSTALL-WINDOWS.md`](INSTALL-WINDOWS.md) — grab the
-  pre-built zip from
-  [the latest release](https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/releases/latest)
-  and unzip. To upgrade, unzip the new release over the old folder.
 
 Per-release changes are tracked in [`CHANGELOG.md`](CHANGELOG.md).
 

@@ -53,7 +53,7 @@ service.
 ```bash
 git clone https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver.git
 cd SPE-Expert-Amplifier-Remote-Webserver/qt6-port
-git checkout v1.3.0
+git checkout v1.4.0
 sudo bash packaging/install-pi.sh
 ```
 
@@ -131,12 +131,12 @@ see the project README's "Securing the daemon" section.
 tag rebuilds the binary, replaces `/usr/local/bin/spe-remoted`, and
 restarts the systemd service. The current release tag is shown on
 [the Releases page](https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/releases/latest);
-substitute it for `v1.3.0` below.
+substitute it for `v1.4.0` below.
 
 ```bash
 cd ~/SPE-Expert-Amplifier-Remote-Webserver           # wherever you cloned it
 git fetch --tags
-git checkout v1.3.0                  # or whatever the new tag is
+git checkout v1.4.0                  # or whatever the new tag is
 sudo bash qt6-port/packaging/install-pi.sh
 ```
 
@@ -164,7 +164,7 @@ out of the way and try again:
 ```bash
 cd ~/SPE-Expert-Amplifier-Remote-Webserver
 git stash                             # park local edits
-git fetch --tags && git checkout v1.3.0
+git fetch --tags && git checkout v1.4.0
 sudo bash qt6-port/packaging/install-pi.sh
 git stash pop                         # only if you actually wanted those edits back
 ```
