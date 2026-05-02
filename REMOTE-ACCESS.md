@@ -168,6 +168,192 @@ on path `/api/health` with action **Bypass**.
 * Cloudflare Access: **free** for up to 50 users.
 * Domain: ~$10/yr (one-off cost; Cloudflare Registrar is at-cost).
 
+### Auth options — pick the depth you want
+
+Five sensible combinations, in increasing order of paranoia. Pick
+one. The first is what the walkthrough above sets up.
+
+#### A — Cloudflare Access only (recommended default)
+
+| Layer | State |
+|---|---|
+| Cloudflare Access (edge) | **On** — SSO / email PIN |
+| Daemon Basic auth | Off |
+| Daemon TLS | Off (Cloudflare terminates TLS at the edge) |
+| `trust_lan` | True (cloudflared appears as `127.0.0.1` to the daemon) |
+
+This is what the 7-step walkthrough above produces. Cloudflare does
+the identity check; the daemon stays in its default no-auth config.
+The tunnel arrives at the daemon as `127.0.0.1`, which `trust_lan`
+treats as same-network, so no double-login.
+
+Right answer for almost everyone. Skip ahead to "WebSockets through
+Cloudflare" unless you have a specific reason to layer more.
+
+#### B — Cloudflare Access + daemon Basic auth (belt and braces)
+
+| Layer | State |
+|---|---|
+| Cloudflare Access | **On** |
+| Daemon Basic auth | **On** |
+| Daemon TLS | Off |
+| `trust_lan` | **False** (so `127.0.0.1` from cloudflared still gets the auth challenge) |
+
+Two independent identity gates. Useful if you don't fully trust
+Cloudflare-the-company (or your CF account's 2FA), or if you want
+the daemon to refuse traffic from any path that bypasses Access
+(e.g. someone with shell access on the Pi running `curl localhost:8080`).
+
+```bash
+# 1. Hash a password.
+spe-remoted --hash-password "your-password-here"
+
+# 2. Edit /var/lib/spe-remote/spe-remote/config.json:
+{
+  "auth_user":           "operator",
+  "auth_password_hash":  "pbkdf2-sha256$120000$...",
+  "trust_lan":           false
+}
+
+# 3. systemctl restart spe-remoted
+```
+
+To get into the web UI: visit
+`https://operator:your-password-here@spe-remote.example.com/` the
+first time, so the browser carries credentials onto the WebSocket
+upgrade. Cloudflare passes `Authorization: Basic` through to the
+tunnel unchanged, the daemon validates it.
+
+#### C — Cloudflare Access + daemon TLS (origin pinning)
+
+| Layer | State |
+|---|---|
+| Cloudflare Access | **On** |
+| Daemon Basic auth | Optional |
+| Daemon TLS | **On**, with a Cloudflare Origin Certificate |
+| `trust_lan` | True (or false if combining with Basic auth) |
+
+Encrypts the hop *between* the Cloudflare edge and your Pi. The Pi
+runs HTTPS using a free Cloudflare-issued origin cert that's only
+trusted by Cloudflare's edge (not the public internet). Closes the
+gap where someone on the same LAN as the Pi could sniff the tunnel
+endpoint's plaintext.
+
+```bash
+# In the Cloudflare dashboard for your domain:
+# SSL/TLS → Origin Server → Create Certificate → 15 year RSA.
+# Save the cert as /etc/ssl/spe-origin.pem and key as
+# /etc/ssl/spe-origin-key.pem (chmod 600 the key).
+
+# Edit /etc/cloudflared/config.yml:
+ingress:
+  - hostname: spe-remote.example.com
+    service: https://localhost:8080
+    originRequest:
+      caPool: /etc/cloudflared/cloudflare-origin-ca.pem
+  - service: http_status:404
+
+# Edit /var/lib/spe-remote/spe-remote/config.json:
+{
+  "cert_file": "/etc/ssl/spe-origin.pem",
+  "key_file":  "/etc/ssl/spe-origin-key.pem"
+}
+```
+
+Niche; Cloudflare Tunnels are already TLS-encrypted between the Pi
+and the edge by default. Worth it only if you have a hard
+requirement that nothing inside the tunnel connection touches
+plaintext.
+
+#### D — Daemon Basic auth + TLS, no Cloudflare (self-hosted)
+
+| Layer | State |
+|---|---|
+| Cloudflare Access | n/a |
+| Daemon Basic auth | **On** |
+| Daemon TLS | **On**, public Let's Encrypt cert |
+| `trust_lan` | **False** |
+
+The "Self-hosted HTTPS + DDNS" pattern at the bottom of this
+document. Maximum DIY, every layer on your hardware, every renewal
+on your cron.
+
+#### E — Tailscale + daemon Basic auth (private + paranoid)
+
+| Layer | State |
+|---|---|
+| Tailscale | **On**, ACLs restricting which devices can reach the Pi |
+| Daemon Basic auth | **On** (optional but recommended) |
+| Daemon TLS | Optional (Tailscale already encrypts the tailnet) |
+| `trust_lan` | **False** if combining with Basic auth |
+
+Use Tailscale ACLs to restrict access to specific tagged devices
+even within your tailnet. Daemon Basic auth catches the case where
+one of those devices is later compromised. No public surface,
+multiple revocation paths.
+
+---
+
+### WebSockets through Cloudflare
+
+WebSockets work over Cloudflare Tunnel out of the box — no extra
+config required. Both `ws://` *and* the daemon's plain WebSocket on
+the same hostname/port will be upgraded transparently and arrive at
+your tunnel as native WS connections.
+
+One caveat that's true everywhere, not specific to Cloudflare: when
+daemon Basic auth is enabled (option B or D), browsers don't carry
+the `Authorization` header onto WebSocket upgrades from JavaScript
+unless you put credentials in the URL the user types. Use the
+`https://user:pass@host/` form for the first connection.
+
+### Cloudflare Access service tokens (for automation)
+
+If you want to script API calls (e.g. uptime monitor, home-assistant
+integration), don't rely on the browser SSO flow. In the Cloudflare
+dashboard:
+
+1. **Zero Trust** → **Access** → **Service Auth** → **Create
+   service token**.
+2. Save the `CF-Access-Client-Id` and `CF-Access-Client-Secret`.
+3. Add a second policy on your Access application: Action **Service
+   Auth**, Include **Service Auth** → tick the token name.
+
+Then from a script:
+
+```bash
+curl https://spe-remote.example.com/api/health \
+    -H "CF-Access-Client-Id: <id>" \
+    -H "CF-Access-Client-Secret: <secret>"
+```
+
+The browser SSO flow is unaffected — humans still get the email PIN.
+
+### IP allowlisting (optional)
+
+Even with SSO, you can pin access to specific source networks:
+
+* **Zero Trust** → **Access** → **Applications** → your app →
+  **Edit policies**.
+* Add a policy: Action **Allow**, Include **Emails** *AND* **IP
+  ranges** (`78.143.0.0/16` for your home / mobile carrier / VPN
+  exit, etc.).
+
+Or for a stricter setup, change the existing policy to **Require IP
+ranges**, so SSO alone isn't enough — the request must also come
+from an approved network.
+
+### Health check exemption (for monitors)
+
+By default `/api/health` sits behind Access too. Uptime monitors
+can't follow an SSO flow, so:
+
+* Add a *second* Access application on path `/api/health`.
+* Set its policy: Action **Bypass**, Include **Everyone**.
+
+`/api/health` is intentionally unauthenticated on the daemon side
+already, so this doesn't expose anything sensitive — just liveness.
+
 ### Troubleshooting
 
 * **`Tunnel returned 502 Bad Gateway`** — cloudflared can't reach
