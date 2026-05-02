@@ -61,6 +61,16 @@ Closing the console window stops the daemon.
 * **COM port permissions** — the FTDI driver from the amp's USB-serial
   cable is required. If `--list-ports` shows nothing, install the FTDI
   VCP driver from [ftdichip.com](https://ftdichip.com/drivers/vcp-drivers/).
+* **`HTTP listen failed: The address is protected`** — Hyper-V /
+  WinNAT reserves blocks of ports (commonly including 8080) on Windows
+  boxes with Docker Desktop, WSL2, or Hyper-V enabled, even when nothing
+  is actually listening there. Open the desktop app's **Connection
+  Settings** dialog and change **HTTP port** to something free
+  (`8500` works on most machines); the daemon persists it to
+  `config.json` so it sticks across restarts. Or run
+  `spe-remoted.exe --http-port 8500` from the command line.
+  Check what's reserved with
+  `netsh interface ipv4 show excludedportrange protocol=tcp`.
 * Saved settings live at `%APPDATA%\spe-remote\config.json`.
 
 ## Adding a password (optional)
