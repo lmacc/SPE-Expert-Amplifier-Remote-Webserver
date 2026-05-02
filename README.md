@@ -206,6 +206,13 @@ The HTTP server and WebSocket bridge support **HTTP Basic auth** and
 **optional TLS**. Both are off by default — fine for a LAN behind a
 home router. Turn them on before exposing the daemon to anything else.
 
+For full **remote access from outside the LAN** (operating from a
+hotel, work, your phone on cellular), the recommended setup is
+Cloudflare Tunnel + Cloudflare Access — free, no port forwarding,
+no exposed home IP, real HTTPS with SSO/email login. Walkthrough in
+[`REMOTE-ACCESS.md`](REMOTE-ACCESS.md). Tailscale and a self-hosted
+Let's Encrypt path are documented there too.
+
 ### LAN trust (on by default)
 
 When a password **is** set, peers on a private network (RFC1918

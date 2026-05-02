@@ -1,0 +1,62 @@
+# Example systemd unit for cloudflared, fronting the SPE Remote daemon.
+#
+# This is a template — `cloudflared service install` will write a
+# functionally equivalent unit, so you only need this file if you want to
+# customise it (e.g. lock down the user/group, change paths, or run
+# alongside another tunnel).
+#
+# Install:
+#   sudo cp packaging/cloudflared.service /etc/systemd/system/
+#   sudo mkdir -p /etc/cloudflared
+#   sudo cp ~/.cloudflared/config.yml         /etc/cloudflared/
+#   sudo cp ~/.cloudflared/<TUNNEL-UUID>.json /etc/cloudflared/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now cloudflared
+#
+# See REMOTE-ACCESS.md for the full setup walkthrough.
+
+[Unit]
+Description=Cloudflare Tunnel for SPE Remote
+Documentation=https://github.com/lmacc/SPE-Expert-Amplifier-Remote-Webserver/blob/main/REMOTE-ACCESS.md
+After=network-online.target spe-remoted.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+# A dedicated unprivileged user is the safe default. cloudflared only
+# needs read access to /etc/cloudflared and the ability to make outbound
+# TCP connections — no special capabilities required.
+User=cloudflared
+Group=cloudflared
+
+# `--no-autoupdate` is the recommended flag for service mode; let your
+# package manager (or a periodic apt upgrade) handle binary updates so
+# they don't surprise you mid-QSO.
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /etc/cloudflared/config.yml tunnel run
+
+# Auto-recover from transient outages (home-internet flaps, Cloudflare
+# edge maintenance) without giving up.
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=0
+
+# Light sandboxing — cloudflared just needs to read its config and talk
+# to the network.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+ReadOnlyPaths=/etc/cloudflared
+
+# Logs go to journald — `journalctl -u cloudflared -f` to tail.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

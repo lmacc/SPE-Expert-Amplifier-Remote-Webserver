@@ -6,6 +6,16 @@ this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Documented
+- `REMOTE-ACCESS.md` — full walkthrough for reaching the daemon
+  from outside the LAN. Cloudflare Tunnel + Cloudflare Access is
+  the recommended path (free, no port forwarding, real HTTPS, SSO
+  login); Tailscale and self-hosted Let's Encrypt + DDNS are
+  documented as alternatives.
+- `packaging/cloudflared.service` — example systemd unit for
+  cloudflared running alongside spe-remoted, with light sandboxing
+  and journald logging.
+
 ## [1.4.0] — 2026-05-02
 
 ### Added
